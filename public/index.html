@@ -14,7 +14,6 @@
   <link rel="preload" as="image" href="/assets/flying-kicks.png">
   <link rel="preload" as="image" href="/assets/punch-frames.png">
   <link rel="stylesheet" href="/style.css">
-  <link rel="stylesheet" href="/viewport.css">
 </head>
 <body>
   <div class="site-shell">
@@ -25,20 +24,16 @@
     </header>
     <main>
       <section class="hero" aria-labelledby="hero-title">
-        <div class="hero-copy"><div class="eyebrow"><span class="tiny-tag">PVP 1 × 1</span><span>COLEGAS NO TRABALHO. RIVAIS NA ARENA.</span></div><h1 id="hero-title">O EXPEDIENTE ACABOU.<br>A <span class="outlined-word">LUTA</span> COMEÇOU<span class="purple">.</span></h1><p>Deixe os chamados de lado. Escolha seu lutador e resolva na arena.</p></div>
-        <div class="hero-stamp" aria-hidden="true"><span class="stamp-orbit">GRUPO APANE · EST. 2026 ·</span><span class="stamp-bolt">ϟ</span><span class="stamp-bottom">SEM CHAMADO. SÓ COMBO.</span></div>
+        <div class="hero-copy"><h1 id="hero-title">O EXPEDIENTE ACABOU.<br>A <span class="outlined-word">LUTA</span> COMEÇOU<span class="purple">.</span></h1></div>
       </section>
       <section class="roster-section" id="roster" aria-labelledby="roster-heading">
-        <div class="section-heading"><div class="section-title"><span class="step-number">01</span><h2 id="roster-heading">ESCOLHA SEU LUTADOR</h2><span class="roster-count">4 DISPONÍVEIS</span></div><span class="selection-note"><span class="mini-cross">✣</span> Cada função, um jeito de lutar.</span></div>
         <div class="character-grid" id="character-grid"></div>
       </section>
       <section class="match-dock" aria-labelledby="match-heading">
         <div class="dock-copy"><span class="step-number">02</span><div><span class="dock-eyebrow">PERSONAGEM ESCOLHIDO. DESAFIO LANÇADO.</span><h2 id="match-heading">A ARENA ESTÁ TE ESPERANDO<span class="purple">.</span></h2><p>Crie uma sala e mande o código para o seu adversário.</p></div></div>
         <div class="dock-actions"><div class="online-actions"><button class="button primary" id="create-button"><span>CRIAR SALA</span><span>↗</span></button><button class="button secondary" id="join-button">ENTRAR COM CÓDIGO</button></div><button class="local-link" id="local-button"><span>⌨</span> No mesmo computador? <strong>Jogar local</strong> <span>→</span></button></div>
       </section>
-      <div class="arena-strip"><span><i class="live-dot"></i> MULTIPLAYER EM TEMPO REAL</span><span><span class="strip-icon">✦</span> HABILIDADES EXCLUSIVAS</span><span><span class="strip-icon">◷</span> 2MIN30 + ITENS ALEATÓRIOS</span><span><span class="strip-icon">↗</span> DIRETO NO NAVEGADOR</span></div>
     </main>
-    <footer><span>PVP <strong>GRUPO APANE</strong><span class="footer-separator">/</span> A arena é nossa.</span><span>FEITO PARA A EQUIPE. JOGADO SEM PIEDADE. <span class="footer-star">✳</span></span></footer>
   </div>
   <dialog id="help-dialog" class="modal help-modal">
     <button class="close-modal" data-close aria-label="Fechar">×</button><span class="modal-kicker">MANUAL DO LUTADOR · ARENA TURBO</span><h2>MENOS REUNIÃO.<br>MAIS AÇÃO.</h2>
@@ -61,6 +56,39 @@
   </section>
   <div class="toast" id="toast" role="status" hidden></div>
   <script type="module" src="/app.js"></script>
-  <script type="module" src="/viewport.js"></script>
+  <!-- Ajuste de tamanho da interface -->
+  <script type="module">
+// Fit the existing interface without changing game rules or local content edits.
+const screens=[document.querySelector('.site-shell'),document.getElementById('game-screen')].filter(Boolean);
+let scheduled=false;
+function fitScreens(){
+  scheduled=false;
+  const view=window.visualViewport;
+  const width=view?.width||window.innerWidth;
+  const height=view?.height||window.innerHeight;
+  for(const screen of screens){
+    if(screen.hidden)continue;
+    // Layout dimensions stay unscaled, avoiding feedback when fonts, cards,
+    // power-up badges or the window change size.
+    const contentHeight=Math.max(screen.offsetHeight,screen.scrollHeight);
+    const contentWidth=Math.max(screen.offsetWidth,screen.scrollWidth);
+    if(!contentHeight||!contentWidth)continue;
+    const scale=Math.min(1,(height-8)/contentHeight,(width-8)/contentWidth);
+    screen.style.setProperty('--viewport-scale',String(Math.max(.05,scale)));
+    screen.style.setProperty('--viewport-top',`${Math.max(0,(height-contentHeight*scale)/2)}px`);
+  }
+}
+function scheduleFit(){
+  if(!scheduled){scheduled=true;requestAnimationFrame(fitScreens);}
+}
+const resizeObserver=new ResizeObserver(scheduleFit);
+for(const screen of screens)resizeObserver.observe(screen);
+new MutationObserver(scheduleFit).observe(document.getElementById('game-screen'),{attributes:true,attributeFilter:['hidden']});
+window.addEventListener('resize',scheduleFit);
+window.visualViewport?.addEventListener('resize',scheduleFit);
+document.fonts.ready.then(scheduleFit);
+window.addEventListener('load',scheduleFit,{once:true});
+scheduleFit();
+  </script>
 </body>
 </html>
