@@ -34,6 +34,10 @@ A partida dura **2min30s completos de combate**, além da contagem inicial. Cada
 
 A movimentação tem aceleração, desaceleração, controle aéreo e salto com tolerância ao apertar perto da aterrissagem. Use **Shift** com uma direção para uma arrancada curta; a recarga é de 0,9 segundo. No celular, há um botão **DASH**.
 
+Os **socos movimentam os braços e as mãos**, com preparação, extensão e recolhimento em 0,24 segundo. O impacto acontece após 0,08 segundo, quando a mão estende, e cada soco causa dano uma única vez. Ser atingido antes desse contato interrompe o soco.
+
+Os lutadores mostram **ferimentos progressivos**: arranhões abaixo de 76 HP, hematomas e mais marcas abaixo de 46 HP, e pequenos cortes com sangue abaixo de 21 HP. Recuperar vida reduz as marcas; retornar de um nocaute com 100 HP restaura a aparência. A arena é um **datacenter escuro**, com racks, switches, patch panels, cabos, UPS, terminais e telas de monitoramento com visual de hacking e LEDs animados.
+
 O especial é uma **voadora**: gasta 50 de energia, salta e avança na direção do rival durante 0,5 segundo. O alcance de contato subiu de 195 para 250 unidades, além do avanço, e a voadora pode conectar durante o trajeto, uma vez por ativação. Ela derruba o adversário, que fica protegido durante a queda e depois se levanta. Defesa ou escudo reduzem o dano e evitam essa queda.
 
 **Todo golpe que causa dano solta sangue em pixel art**, incluindo o dano reduzido de um golpe defendido. A voadora produz quatro vezes mais partículas que um golpe comum. As manchas permanecem no ringue durante toda a partida, inclusive após nocautes; só são limpas ao iniciar outra partida ou revanche. O som pode ser ativado no cabeçalho.
@@ -73,6 +77,7 @@ Não são necessárias credenciais, serviços externos ou variáveis obrigatóri
 - `server.js`: HTTP, salas, validação das mensagens e simulação online autoritativa.
 - `public/engine.js`: regras compartilhadas entre servidor e modo local.
 - `public/art.js`: personagens originais e cenário desenhados em SVG/Canvas.
+- `public/injuries.js`: ferimentos visuais conforme a vida atual do lutador.
 - `public/assets/`: arte dos quatro lutadores, compartilhada pela seleção e pelo combate.
 - `public/app.js`: seleção, salas, controles, áudio e interface da partida.
 - `public/style.css`: interface responsiva, temas dos personagens e controles de toque.

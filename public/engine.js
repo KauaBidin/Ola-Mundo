@@ -9,6 +9,8 @@ export const CHARACTERS = [
 
 export const ARENA_WIDTH = 1000;
 export const ROUND_DURATION = 150;
+export const PUNCH_DURATION = 0.24;
+export const PUNCH_WINDUP = 0.08;
 export const SPECIAL_DURATION = 0.5;
 export const SPECIAL_REACH = 250;
 export const ITEM_TYPES = [
@@ -37,6 +39,7 @@ export function createMatch(ids = ['emerzon', 'douglas'], { seed = Math.floor(Ma
       characterId: characterFor(ids[index]).id, x: spawnX(index),
       y: 0, vx: 0, vy: 0, facing: index ? -1 : 1, hp: 100, energy: 100,
       action: 'idle', attackTimer: 0, attackCooldown: 0, specialCooldown: 0,
+      punchPending: false,
       hitTimer: 0, previousJump: false, jumpBuffer: 0, coyoteTimer: 0.09,
       dashTimer: 0, dashCooldown: 0, previousDash: false, dashDirection: index ? -1 : 1,
       kickTimer: 0, kickDirection: index ? -1 : 1, kickHit: false,
@@ -61,6 +64,7 @@ function respawn(state, index) {
   Object.assign(player, {
     x: spawnX(index), y: 0, vx: 0, vy: 0, hp: 100, energy: 100,
     action: 'idle', attackTimer: 0, attackCooldown: 0, specialCooldown: 0,
+    punchPending: false,
     hitTimer: 0, downTimer: 0, respawnTimer: 0, invulnerableTimer: 1.5,
     dashTimer: 0, dashCooldown: 0, jumpBuffer: 0, coyoteTimer: 0.09,
     kickTimer: 0, kickHit: false,
@@ -95,14 +99,14 @@ function movePlayer(state, index, input, dt, strikes) {
   if (player.respawnTimer > 0 || player.hp <= 0) {
     player.respawnTimer = timer(player.respawnTimer, dt);
     if (!player.respawnTimer) { respawn(state, index); return; }
-    player.action = 'knockout'; player.attackTimer = 0; player.kickTimer = 0; player.hitTimer = 0; player.dashTimer = 0;
+    player.action = 'knockout'; player.attackTimer = 0; player.punchPending = false; player.kickTimer = 0; player.hitTimer = 0; player.dashTimer = 0;
     player.vx = approach(player.vx, 0, dt * 340);
     moveBody(player, dt);
     return;
   }
   player.facing = player.x <= opponent.x ? 1 : -1;
   if (wasDown) {
-    player.dashTimer = 0; player.kickTimer = 0; player.attackTimer = 0; player.hitTimer = 0; player.jumpBuffer = 0;
+    player.dashTimer = 0; player.kickTimer = 0; player.attackTimer = 0; player.punchPending = false; player.hitTimer = 0; player.jumpBuffer = 0;
     player.vx = approach(player.vx, 0, dt * 400);
     moveBody(player, dt);
     if (!player.downTimer && !player.y) {
@@ -116,17 +120,25 @@ function movePlayer(state, index, input, dt, strikes) {
   player.coyoteTimer = grounded ? 0.09 : timer(player.coyoteTimer, dt);
   if (jumpPressed) player.jumpBuffer = 0.12;
   if (player.hitTimer > 0) {
-    player.action = 'hit'; player.dashTimer = 0; player.kickTimer = 0;
+    player.action = 'hit'; player.dashTimer = 0; player.kickTimer = 0; player.attackTimer = 0; player.punchPending = false;
     player.vx = approach(player.vx, 0, dt * 180);
     moveBody(player, dt);
     return;
   }
   if (player.kickTimer > 0) {
+    player.punchPending = false;
     player.action = 'special'; player.attackTimer = player.kickTimer;
     player.facing = player.kickDirection; player.vx = player.kickDirection * 620;
     moveBody(player, dt);
     if (!player.kickHit) strikes.push({ attacker: index, special: true });
     return;
+  }
+
+  // The hand reaches full extension after its windup, rather than dealing
+  // damage on the button press. Consume the contact once, even if it misses.
+  if (player.punchPending && player.attackTimer <= PUNCH_DURATION - PUNCH_WINDUP + EPSILON) {
+    if (player.attackTimer > 0) strikes.push({ attacker: index, special: false });
+    player.punchPending = false;
   }
 
   const blocking = !!input.block && grounded && !player.attackTimer && !player.dashTimer;
@@ -157,13 +169,14 @@ function movePlayer(state, index, input, dt, strikes) {
       if (input.special && !player.specialCooldown && player.energy >= 50) {
         player.energy -= 50; player.specialCooldown = 1.6;
         player.attackCooldown = 0.65; player.attackTimer = SPECIAL_DURATION; player.action = 'special';
+        player.punchPending = false;
         player.kickTimer = SPECIAL_DURATION; player.kickDirection = player.facing; player.kickHit = false;
         player.dashTimer = 0; player.vx = player.kickDirection * 620;
         if (grounded) player.vy = 340;
         strikes.push({ attacker: index, special: true }); event(state, 'special', { player: index });
       } else if (input.attack && !player.attackCooldown) {
-        player.attackCooldown = 0.4; player.attackTimer = 0.2; player.action = 'attack';
-        strikes.push({ attacker: index, special: false }); event(state, 'punch', { player: index });
+        player.attackCooldown = 0.4; player.attackTimer = PUNCH_DURATION; player.action = 'attack';
+        player.punchPending = true; event(state, 'punch', { player: index });
       }
     }
   }
@@ -239,10 +252,10 @@ function simulate(state, inputs, dt) {
     target.hp = Math.max(0, target.hp - hit.damage);
     if (hit.knockdown) {
       target.downTimer = 1.15; target.action = 'down'; target.vx = hit.direction * 480; target.vy = 460;
-      target.invulnerableTimer = 1.15; target.dashTimer = 0; target.kickTimer = 0; target.attackTimer = 0;
+      target.invulnerableTimer = 1.15; target.dashTimer = 0; target.kickTimer = 0; target.attackTimer = 0; target.punchPending = false;
     } else if (!hit.blocked) {
       target.hitTimer = 0.14; target.action = 'hit'; target.vx = hit.direction * 150;
-      target.dashTimer = 0; target.kickTimer = 0; target.attackTimer = 0;
+      target.dashTimer = 0; target.kickTimer = 0; target.attackTimer = 0; target.punchPending = false;
     } else target.vx += hit.direction * 25;
     event(state, hit.blocked ? 'block' : 'hit', {
       player: hit.targetIndex, attacker: hit.attacker, damage: hit.damage, special: hit.special,
@@ -250,7 +263,7 @@ function simulate(state, inputs, dt) {
     });
     if (!target.hp) {
       state.scores[hit.attacker]++;
-      target.action = 'knockout'; target.respawnTimer = 2; target.downTimer = 0; target.hitTimer = 0; target.kickTimer = 0;
+      target.action = 'knockout'; target.respawnTimer = 2; target.downTimer = 0; target.hitTimer = 0; target.kickTimer = 0; target.punchPending = false;
       event(state, 'ko', { player: hit.targetIndex, attacker: hit.attacker, x: target.x, y: target.y });
     }
   }

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { CHARACTERS, ITEM_TYPES, ROUND_DURATION, SPECIAL_DURATION, SPECIAL_REACH, createMatch, stepMatch } from '../public/engine.js';
+import { CHARACTERS, ITEM_TYPES, ROUND_DURATION, PUNCH_DURATION, PUNCH_WINDUP, SPECIAL_DURATION, SPECIAL_REACH, createMatch, stepMatch } from '../public/engine.js';
 
 const playing = (ids, seed = 12345) => { const match = createMatch(ids, { seed }); match.phase = 'playing'; match.countdown = 0; return match; };
 const advance = (state, inputs, seconds, hz = 60) => {
@@ -8,6 +8,10 @@ const advance = (state, inputs, seconds, hz = 60) => {
   return state;
 };
 const closeFighters = state => { state.players[0].x = 400; state.players[1].x = 485; return state; };
+const landPunch = (state, inputs = [{ attack: true }, {}]) => {
+  stepMatch(state, inputs, 1 / 120);
+  return stepMatch(state, inputs, PUNCH_WINDUP);
+};
 const pickup = (state, type, index = 0) => {
   const player = state.players[index];
   state.items.push({ id: ++state.itemId, type, x: player.x, y: player.y, vy: 0, ttl: 14 });
@@ -89,15 +93,79 @@ test('punches need range, have reduced damage and preserve physical knockback du
   const state = playing(); stepMatch(state, [{ attack: true }, {}], 1 / 60);
   assert.equal(state.players[1].hp, 100);
   advance(state, [{}, {}], 0.5); closeFighters(state);
-  stepMatch(state, [{ attack: true }, {}], 1 / 120);
+  landPunch(state);
   const hp = state.players[1].hp, x = state.players[1].x;
   assert.ok(hp >= 91 && hp <= 94); assert.ok(state.players[1].vx > 0);
   advance(state, [{ attack: true }, { left: true }], 0.1);
   assert.equal(state.players[1].hp, hp); assert.ok(state.players[1].x > x, 'opposite input cannot erase knockback during hitstun');
   // Direction and blood eligibility are checked at the actual connecting tick below.
-  const fresh = closeFighters(playing()); stepMatch(fresh, [{ attack: true }, {}], 1 / 120);
+  const fresh = closeFighters(playing()); landPunch(fresh);
   assert.equal(fresh.events.find(e => e.type === 'hit').direction, 1);
   assert.equal(fresh.events.find(e => e.type === 'hit').knockdown, false);
+});
+
+test('punches connect only at full hand extension and deal damage once per animation', () => {
+  const state = closeFighters(playing());
+  stepMatch(state, [{ attack: true }, {}], 1 / 120);
+  assert.equal(PUNCH_DURATION, 0.24); assert.equal(PUNCH_WINDUP, 0.08);
+  assert.equal(state.players[0].attackTimer, PUNCH_DURATION);
+  assert.equal(state.players[0].punchPending, true);
+  assert.equal(state.players[1].hp, 100, 'button press only starts the arm windup');
+  stepMatch(state, [{}, {}], PUNCH_WINDUP - 0.01);
+  assert.equal(state.players[1].hp, 100);
+  stepMatch(state, [{}, {}], 0.01);
+  const hp = state.players[1].hp;
+  assert.ok(hp < 100); assert.equal(state.players[0].punchPending, false);
+  assert.equal(state.events.filter(e => e.type === 'hit').length, 1);
+  // Keep the rival in reach without hitstun to expose accidental repeat hits.
+  Object.assign(state.players[1], { x: state.players[0].x + 85, vx: 0, hitTimer: 0, action: 'idle' });
+  advance(state, [{ attack: true }, {}], 0.15, 120);
+  assert.equal(state.players[1].hp, hp);
+  assert.ok(state.players[0].attackCooldown > 0.15, 'holding attack cannot restart before its cooldown');
+});
+
+test('punch range is measured at contact and a missed punch cannot hit during retraction', () => {
+  const miss = closeFighters(playing());
+  stepMatch(miss, [{ attack: true }, {}], 1 / 120);
+  miss.players[1].x = 650;
+  stepMatch(miss, [{}, {}], PUNCH_WINDUP);
+  assert.equal(miss.players[1].hp, 100); assert.equal(miss.players[0].punchPending, false);
+  closeFighters(miss);
+  advance(miss, [{}, {}], 0.15, 120);
+  assert.equal(miss.players[1].hp, 100, 'a rival entering reach after extension avoids the missed punch');
+
+  const enters = playing();
+  stepMatch(enters, [{ attack: true }, {}], 1 / 120);
+  closeFighters(enters);
+  stepMatch(enters, [{}, {}], PUNCH_WINDUP);
+  assert.ok(enters.players[1].hp < 100, 'a rival entering reach before extension can be hit');
+});
+
+test('an earlier normal hit interrupts a winding-up punch before its pending contact', () => {
+  const state = closeFighters(playing());
+  stepMatch(state, [{}, { attack: true }], 1 / 120);
+  stepMatch(state, [{}, {}], PUNCH_WINDUP / 2);
+  stepMatch(state, [{ attack: true }, {}], 1 / 120);
+  assert.equal(state.players[0].punchPending, true);
+  stepMatch(state, [{}, {}], PUNCH_WINDUP / 2);
+  assert.equal(state.players[0].action, 'hit'); assert.equal(state.players[0].punchPending, false);
+  advance(state, [{}, {}], 0.3, 120);
+  assert.equal(state.players[1].hp, 100, 'canceled hand movement cannot produce delayed damage');
+});
+
+test('knockdown, KO and respawn clear an unfinished punch', () => {
+  for (const hp of [100, 1]) {
+    const state = closeFighters(playing()); state.players[0].hp = hp;
+    stepMatch(state, [{ attack: true }, {}], 1 / 120);
+    stepMatch(state, [{}, { special: true }], 1 / 120);
+    assert.equal(state.players[0].punchPending, false);
+    assert.equal(state.players[0].attackTimer, 0);
+    assert.equal(state.players[0].action, hp === 1 ? 'knockout' : 'down');
+    advance(state, [{}, {}], 2.1);
+    assert.equal(state.players[1].hp, 100);
+    assert.equal(state.players[0].punchPending, false);
+    if (hp === 1) assert.equal(state.players[0].hp, 100);
+  }
 });
 
 test('special launches, protects the fallen player from juggling, then recovers on the floor', () => {
@@ -137,7 +205,7 @@ test('special costs energy, has longer range and cannot be spammed', () => {
 
 test('KO awards a point, never ends early, and respawns with temporary protection', () => {
   const state = closeFighters(playing()); state.players[1].hp = 1;
-  stepMatch(state, [{ attack: true }, {}], 1 / 120);
+  landPunch(state);
   assert.equal(state.phase, 'playing'); assert.equal(state.winner, null); assert.deepEqual(state.scores, [1, 0]);
   assert.equal(state.players[1].action, 'knockout'); assert.equal(state.players[1].respawnTimer, 2);
   assert.ok(state.events.some(e => e.type === 'ko' && e.player === 1 && e.attacker === 0));
@@ -162,7 +230,7 @@ test('time expiry uses scores first, health second, and supports draws; results 
 
 test('simultaneous lethal attacks award both points instead of privileging P1', () => {
   const state = closeFighters(playing()); state.players.forEach(p => { p.hp = 1; });
-  stepMatch(state, [{ attack: true }, { attack: true }], 1 / 120);
+  landPunch(state, [{ attack: true }, { attack: true }]);
   assert.deepEqual(state.scores, [1, 1]); assert.ok(state.players.every(p => p.hp === 0 && p.respawnTimer > 0));
   assert.equal(state.events.filter(e => e.type === 'ko').length, 2); assert.equal(state.phase, 'playing');
   const specials = closeFighters(playing());
@@ -219,7 +287,7 @@ test('speed, rage and jump pickups materially change movement, damage and jump h
   pickup(fast, 'speed'); advance(normal, [{ right: true }, {}], 1); advance(fast, [{ right: true }, {}], 1);
   assert.ok(fast.players[0].x > normal.players[0].x + 65);
   const baseHit = closeFighters(playing()), rage = closeFighters(playing()); pickup(rage, 'rage');
-  stepMatch(baseHit, [{ attack: true }, {}], 1 / 120); stepMatch(rage, [{ attack: true }, {}], 1 / 120);
+  landPunch(baseHit); landPunch(rage);
   assert.ok(rage.players[1].hp < baseHit.players[1].hp);
   const baseJump = playing(), highJump = playing(); pickup(highJump, 'jump');
   advance(baseJump, [{ jump: true }, {}], 0.3); advance(highJump, [{ jump: true }, {}], 0.3);
@@ -290,7 +358,8 @@ test('normal hits, knockdowns and KO interrupt a flying kick; simultaneous kicks
   for (const [attackerInput, hp, expected] of [[{ attack: true }, 100, 'hit'], [{ special: true }, 100, 'down'], [{ attack: true }, 1, 'knockout']]) {
     const state = closeFighters(playing());
     Object.assign(state.players[0], { action: 'special', kickTimer: 0.4, attackTimer: 0.4, kickDirection: 1, kickHit: true, hp });
-    stepMatch(state, [{}, attackerInput], 1 / 120);
+    if (attackerInput.attack) landPunch(state, [{}, attackerInput]);
+    else stepMatch(state, [{}, attackerInput], 1 / 120);
     assert.equal(state.players[0].action, expected); assert.equal(state.players[0].kickTimer, 0); assert.equal(state.players[0].attackTimer, 0);
   }
   const both = closeFighters(playing()); stepMatch(both, [{ special: true }, { special: true }], 1 / 120);
@@ -299,7 +368,9 @@ test('normal hits, knockdowns and KO interrupt a flying kick; simultaneous kicks
 
 test('all positive-damage strikes identify blood eligibility, including defense chip', () => {
   for (const [special, block] of [[false, false], [true, false], [false, true], [true, true]]) {
-    const state = closeFighters(playing()); stepMatch(state, [special ? { special: true } : { attack: true }, block ? { block: true } : {}], 1 / 120);
+    const state = closeFighters(playing()), inputs = [special ? { special: true } : { attack: true }, block ? { block: true } : {}];
+    if (special) stepMatch(state, inputs, 1 / 120);
+    else landPunch(state, inputs);
     const damage = state.events.find(e => ['hit', 'block'].includes(e.type));
     assert.ok(damage.damage > 0 && damage.blood); assert.equal(damage.special, special);
     assert.equal(damage.knockdown, special && !block);
