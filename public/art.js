@@ -1,15 +1,15 @@
 // Photo-inspired pixel art, shared by the selection screen and the arena.
 // Crops and individual artwork are reused by SVG/Canvas.
 const SHEETS = {
-  base: { src:'/assets/fighters-reference.png', width:1774, height:887 },
-  douglas: { src:'/assets/douglas-shirtless.png', width:1136, height:1385 },
+  emerzon: { src:'/assets/emerzon-corinthians.png', width:1024, height:1536, feet:1465 },
+  douglas: { src:'/assets/douglas-revolver.png', width:1136, height:1385, feet:1339 },
+  jose: { src:'/assets/jose-coffee.png', width:1024, height:1536, feet:1488 },
+  kaua: { src:'/assets/kaua-saopaulo.png', width:1046, height:1504, feet:1450 },
 };
-const CROPS = {
-  emerzon: { x:0, width:466 },
-  douglas: { sheet:'douglas', x:0, y:0, width:1136, height:1385 },
-  jose: { x:911, width:454 }, kaua: { x:1365, width:409 },
-};
-const cropFor = id => ({ sheet:'base', y:24, height:850, ...(CROPS[id]||CROPS.emerzon) });
+// Register each sprite at its soles instead of its transparent bottom margin.
+const CROPS = Object.fromEntries(Object.entries(SHEETS).map(([id,sheet]) =>
+  [id, { sheet:id, x:0, y:0, width:sheet.width, height:sheet.feet }]));
+const cropFor = id => CROPS[id]||CROPS.emerzon;
 for (const sheet of Object.values(SHEETS)) {
   sheet.image = typeof Image === 'undefined' ? null : new Image();
   if (sheet.image) sheet.image.src = sheet.src;
@@ -17,10 +17,10 @@ for (const sheet of Object.values(SHEETS)) {
 
 // Lightweight animated fallback while the shared image is loading.
 const LOOKS = {
-  emerzon: { skin:'#d1a185', shade:'#a8755d', hair:'#302820', top:'#24364d', light:'#344b63', dark:'#19273b', pants:'#292f38', accent:'#b6f269' },
+  emerzon: { skin:'#d1a185', shade:'#a8755d', hair:'#302820', top:'#e9e9e3', light:'#ffffff', dark:'#26282d', pants:'#292f38', accent:'#b6f269' },
   douglas: { skin:'#cda080', shade:'#a87660', hair:'#292626', top:'#cda080', light:'#e1b497', dark:'#a87660', pants:'#30323c', accent:'#bc91ff' },
   jose: { skin:'#bc8c70', shade:'#93664e', hair:'#2d2523', top:'#254d43', light:'#38695c', dark:'#19382f', pants:'#2b313d', accent:'#69cfff' },
-  kaua: { skin:'#d7ab8d', shade:'#ae7d65', hair:'#272321', top:'#255357', light:'#367075', dark:'#193b40', pants:'#30343d', accent:'#ffb66f' },
+  kaua: { skin:'#d7ab8d', shade:'#ae7d65', hair:'#272321', top:'#ecece7', light:'#ffffff', dark:'#c4c8c8', pants:'#30343d', accent:'#ffb66f' },
 };
 
 function sprite(id, pose='idle', frame=0) {
@@ -45,9 +45,11 @@ function sprite(id, pose='idle', frame=0) {
     rect(34,68,3,3,c.shade);rect(23,75,27,2,c.shade);rect(22,78,28,3,c.pants);
   }
   if(id==='emerzon') {
-    // Plain navy T-shirt with a round collar.
+    // Corinthians-inspired white jersey, black collar and a tiny club crest.
     rect(22,47,25,21,c.top);rect(27,42,19,6,c.dark);rect(29,42,15,4,c.skin);rect(31,46,11,2,c.dark);
-    rect(24,50,3,12,c.light);rect(42,62,5,2,c.dark);
+    rect(24,50,3,12,c.light);rect(42,65,5,2,'#c8cbcb');
+    rect(38,52,8,9,'#202329');rect(40,51,4,11,'#202329');rect(39,54,6,5,'#f9f7ee');
+    rect(41,52,2,9,'#b02b3c');rect(38,56,8,1,'#b02b3c');rect(40,62,4,1,'#202329');
   }
   if(id==='jose') {
     // Dark-green polo, white collar and a small white pocket detail.
@@ -56,15 +58,22 @@ function sprite(id, pose='idle', frame=0) {
     rect(39,54,8,6,'#dce3db');rect(40,56,6,4,c.top);
   }
   if(id==='kaua') {
-    // Petrol-blue / dark-teal crew-neck T-shirt, no accessories.
-    rect(22,47,25,21,c.top);rect(27,42,19,6,c.dark);rect(29,42,15,4,c.skin);rect(31,46,11,2,c.dark);
-    rect(24,50,3,13,c.light);rect(40,64,7,2,c.dark);
+    // São Paulo-inspired white jersey with horizontal red and black bands.
+    rect(22,47,25,21,c.top);rect(27,42,19,6,'#22252a');rect(29,42,15,4,c.skin);rect(31,46,11,2,'#22252a');
+    rect(19,53,31,5,'#c53340');rect(19,59,31,5,'#20242b');
+    rect(31,51,12,9,'#ffffff');rect(33,60,8,2,'#ffffff');rect(35,62,4,2,'#ffffff');
+    rect(32,52,10,3,'#20242b');rect(33,56,4,4,'#c53340');rect(38,56,3,4,'#20242b');
+    rect(35,60,4,2,'#20242b');rect(34,53,1,1,'#ffffff');rect(37,53,1,1,'#ffffff');rect(40,53,1,1,'#ffffff');
   }
   // Left arm, bent into a guard.
   rect(10,46,10,19,c.top);rect(7,61,12,8,c.dark);rect(6,53,8,12,c.skin);rect(4,48,12,10,c.skin);rect(4,48,12,3,c.shade);rect(5,49,10,3,c.skin);
   if(punch) {rect(47,46,18,11,c.top);rect(57,47,20,9,c.skin);rect(73,43,14,15,c.skin);rect(73,54,13,4,c.shade);rect(75,44,10,3,'#ffffff20');}
   else if(block) {rect(47,43,10,20,c.top);rect(49,29,9,22,c.skin);rect(46,26,14,12,c.skin);rect(46,26,14,3,c.shade);}
   else {rect(46,47,11,18,c.top);rect(51,52,10,14,c.dark);rect(53,43,8,15,c.skin);rect(50,38,14,12,c.skin);rect(50,38,14,3,c.shade);rect(52,39,10,2,'#ffffff1a');}
+  if(id==='emerzon') {
+    rect(10,46,10,3,'#202329');
+    if(punch)rect(57,46,6,11,'#202329');else if(block)rect(47,43,10,3,'#202329');else rect(46,47,11,3,'#202329');
+  }
   // Head, ears and pixel highlights.
   rect(22,13,27,23,c.skin);rect(25,31,22,8,c.skin);rect(24,35,17,5,c.shade);rect(19,21,5,10,c.shade);rect(20,22,5,7,c.skin);
   rect(47,24,5,7,c.skin);rect(25,14,5,18,'#ffffff12');rect(44,16,5,15,c.shade);
@@ -106,6 +115,21 @@ function sprite(id, pose='idle', frame=0) {
   } else if(id==='jose') {
     // Sparse stubble, leaving the face lighter than the two bearded fighters.
     rect(27,33,2,2,'#8b6853');rect(44,33,2,2,'#8b6853');rect(31,36,2,1,'#8b6853');rect(36,37,5,1,'#8b6853');rect(42,35,2,1,'#8b6853');
+  }
+  if(id==='douglas') {
+    // A small upright .38-style revolver in the guard hand, purely cosmetic.
+    rect(8,27,4,15,'#30323a');rect(7,26,6,3,'#1b1d24');rect(9,30,1,10,'#7c8087');
+    rect(5,40,10,7,'#292c34');rect(6,41,4,4,'#626670');rect(11,42,3,3,'#171a20');
+    rect(10,46,6,3,'#20232a');rect(11,48,4,7,'#76513a');rect(11,49,1,4,'#aa7a51');
+    rect(6,48,5,5,c.skin);rect(12,53,3,3,c.skin);
+  } else if(id==='jose') {
+    // The cup follows the raised hand; during a punch it travels with the fist.
+    const cupX=punch?73:block?46:43, cupY=punch?36:block?21:30;
+    rect(cupX,cupY,14,12,'#f1f0e9');rect(cupX+1,cupY+3,3,7,'#ffffff');rect(cupX+10,cupY+3,3,8,'#c3cdca');
+    rect(cupX+13,cupY+3,5,8,'#f1f0e9');rect(cupX+14,cupY+5,3,4,c.top);
+    rect(cupX,cupY,14,3,'#d8dcd5');rect(cupX+2,cupY+1,10,2,'#61402b');rect(cupX+3,cupY+1,5,1,'#99724d');
+    rect(cupX+4,cupY-7,2,4,'#e2ecea88');rect(cupX+6,cupY-11-(Math.floor(frame*3)%2),2,3,'#e2ecea66');
+    rect(cupX+10,cupY-6,1,3,'#e2ecea66');
   }
   if(hit) rect(25,19,25,15,'#ff8c8c22');
   return r;
