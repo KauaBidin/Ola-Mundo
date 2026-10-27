@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#111014">
+  <meta name="description" content="O expediente acabou. A luta começou. Escolha seu personagem e desafie a equipe na arena multiplayer do Grupo APANE.">
+  <title>PVP GRUPO APANE — A arena é nossa.</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div class="site-shell">
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="PVP Grupo Apane, início"><span class="brand-mark" aria-hidden="true"><svg width="35" height="38" viewBox="0 0 35 38" fill="currentColor"><path d="M0 35 13 3h9l4 32h-8l-1-7H11l-3 7ZM14 21h4l-1-10Z"/><path d="m24 3 10-2-2 10-3-3-7 8-3-3 7-7Z"/></svg></span><span class="brand-word">APANE<span>FIGHT CLUB</span></span></a>
+      <nav aria-label="Navegação principal"><a href="#roster" class="nav-link active">A ARENA</a><button class="nav-link" id="how-button">COMO JOGAR <span>↗</span></button></nav>
+      <div class="header-tools"><span class="server-status" id="server-status"><i></i> CONECTANDO</span><button class="sound-button" id="sound-button" aria-label="Ativar efeitos sonoros" aria-pressed="false"></button></div>
+    </header>
+    <main>
+      <section class="hero" aria-labelledby="hero-title">
+        <div class="hero-copy"><div class="eyebrow"><span class="tiny-tag">PVP 1 × 1</span><span>COLEGAS NO TRABALHO. RIVAIS NA ARENA.</span></div><h1 id="hero-title">O EXPEDIENTE ACABOU.<br>A <span class="outlined-word">LUTA</span> COMEÇOU<span class="purple">.</span></h1><p>Deixe os chamados de lado. Escolha seu lutador e resolva na arena.</p></div>
+        <div class="hero-stamp" aria-hidden="true"><span class="stamp-orbit">GRUPO APANE · EST. 2026 ·</span><span class="stamp-bolt">ϟ</span><span class="stamp-bottom">SEM CHAMADO. SÓ COMBO.</span></div>
+      </section>
+      <section class="roster-section" id="roster" aria-labelledby="roster-heading">
+        <div class="section-heading"><div class="section-title"><span class="step-number">01</span><h2 id="roster-heading">ESCOLHA SEU LUTADOR</h2><span class="roster-count">4 DISPONÍVEIS</span></div><span class="selection-note"><span class="mini-cross">✣</span> Cada função, um jeito de lutar.</span></div>
+        <div class="character-grid" id="character-grid"></div>
+      </section>
+      <section class="match-dock" aria-labelledby="match-heading">
+        <div class="dock-copy"><span class="step-number">02</span><div><span class="dock-eyebrow">PERSONAGEM ESCOLHIDO. DESAFIO LANÇADO.</span><h2 id="match-heading">A ARENA ESTÁ TE ESPERANDO<span class="purple">.</span></h2><p>Crie uma sala e mande o código para o seu adversário.</p></div></div>
+        <div class="dock-actions"><div class="online-actions"><button class="button primary" id="create-button"><span>CRIAR SALA</span><span>↗</span></button><button class="button secondary" id="join-button">ENTRAR COM CÓDIGO</button></div><button class="local-link" id="local-button"><span>⌨</span> No mesmo computador? <strong>Jogar local</strong> <span>→</span></button></div>
+      </section>
+      <div class="arena-strip"><span><i class="live-dot"></i> MULTIPLAYER EM TEMPO REAL</span><span><span class="strip-icon">✦</span> HABILIDADES EXCLUSIVAS</span><span><span class="strip-icon">◷</span> ROUNDS DE 60 SEGUNDOS</span><span><span class="strip-icon">↗</span> DIRETO NO NAVEGADOR</span></div>
+    </main>
+    <footer><span>PVP <strong>GRUPO APANE</strong><span class="footer-separator">/</span> A arena é nossa.</span><span>FEITO PARA A EQUIPE. JOGADO SEM PIEDADE. <span class="footer-star">✳</span></span></footer>
+  </div>
+  <dialog id="help-dialog" class="modal help-modal"><button class="close-modal" data-close aria-label="Fechar">×</button><span class="modal-kicker">MANUAL DO LUTADOR</span><h2>MENOS REUNIÃO.<br>MAIS AÇÃO.</h2><p>Ven&ccedil;a zerando a vida do adversário ou termine os 60 segundos com mais vida. O especial consome energia, que recarrega com o tempo.</p><div class="control-columns"><div><h3>JOGADOR 1 / ONLINE</h3><dl><div><dt><kbd>A</kbd><kbd>D</kbd></dt><dd>Mover</dd></div><div><dt><kbd>W</kbd></dt><dd>Pular</dd></div><div><dt><kbd>F</kbd></dt><dd>Atacar</dd></div><div><dt><kbd>G</kbd></dt><dd>Especial</dd></div><div><dt><kbd>S</kbd></dt><dd>Defender</dd></div></dl></div><div><h3>JOGADOR 2 / LOCAL</h3><dl><div><dt><kbd>←</kbd><kbd>→</kbd></dt><dd>Mover</dd></div><div><dt><kbd>↑</kbd></dt><dd>Pular</dd></div><div><dt><kbd>K</kbd></dt><dd>Atacar</dd></div><div><dt><kbd>L</kbd></dt><dd>Especial</dd></div><div><dt><kbd>↓</kbd></dt><dd>Defender</dd></div></dl></div></div><p class="help-tip">No celular, use os controles na tela. No modo online, os dois jogadores usam os controles do Jogador 1.</p><button class="button primary full" data-close>ENTENDI. BORA PRA LUTA! <span>↗</span></button></dialog>
+  <dialog id="join-dialog" class="modal"><button class="close-modal" data-close aria-label="Fechar">×</button><span class="modal-kicker">DESAFIO ACEITO</span><h2>ENCONTRE<br>SEU ADVERSÁRIO<span class="purple">.</span></h2><p>Digite o código da sala que seu colega compartilhou.</p><form id="join-form"><label for="room-code">CÓDIGO DA SALA</label><input id="room-code" name="code" placeholder="EX: AP4N3X" maxlength="6" minlength="6" pattern="[A-Za-z0-9]{6}" autocomplete="off" spellcheck="false" required><p class="form-error" id="join-error" role="alert"></p><button class="button primary full" type="submit">ENTRAR NA ARENA <span>↗</span></button></form></dialog>
+  <dialog id="lobby-dialog" class="modal lobby-modal"><button class="close-modal" id="leave-lobby" aria-label="Sair da sala">×</button><span class="modal-kicker">SALA CRIADA · PVP ONLINE</span><h2>CHAME SEU<br>PRÓXIMO RIVAL<span class="purple">.</span></h2><p>Compartilhe este código. A luta começa assim que seu adversário entrar.</p><div class="room-code-box"><span id="lobby-code">------</span><button id="copy-code" aria-label="Copiar código da sala">COPIAR <span>⧉</span></button></div><div class="lobby-player" id="lobby-player"></div><div class="waiting"><span class="waiting-spinner"></span> AGUARDANDO ADVERSÁRIO<span class="waiting-dots">...</span></div><button class="text-button" id="cancel-room">Cancelar sala</button></dialog>
+  <dialog id="local-dialog" class="modal local-modal"><button class="close-modal" data-close aria-label="Fechar">×</button><span class="modal-kicker">PVP LOCAL · UM TECLADO, DOIS RIVAIS</span><h2>QUEM VAI<br>ENCARAR VOCÊ<span class="purple">?</span></h2><p>Jogador 1: <strong id="local-player-name">Emerzon</strong>. Escolha o personagem do Jogador 2.</p><div id="opponent-grid" class="opponent-grid"></div><p class="local-keys"><strong>P1</strong> A D · W · F G · S <span>|</span> <strong>P2</strong> ← → · ↑ · K L · ↓</p><button class="button primary full" id="start-local">COMEÇAR O CONFRONTO <span>↗</span></button></dialog>
+  <section id="game-screen" class="game-screen" aria-label="Arena de combate" hidden>
+    <div class="game-topbar"><span class="game-logo">APANE<span> / FIGHT CLUB</span></span><span id="game-mode">PVP LOCAL</span><button class="game-exit" id="exit-game">SAIR DA ARENA ×</button></div>
+    <div class="game-hud"><div class="fighter-hud"><div class="hud-label"><strong id="p1-name"></strong><span>P1</span></div><div class="health-track"><div id="p1-health"></div></div><div class="energy-track"><div id="p1-energy"></div></div></div><div class="timer-box"><span>ROUND 01</span><strong id="timer">60</strong></div><div class="fighter-hud second"><div class="hud-label"><span>P2</span><strong id="p2-name"></strong></div><div class="health-track"><div id="p2-health"></div></div><div class="energy-track"><div id="p2-energy"></div></div></div></div>
+    <div class="canvas-wrap"><canvas id="arena-canvas" width="1200" height="600" aria-label="Arena. Use os controles de movimento e ataque para lutar."></canvas><div class="game-announcement" id="game-announcement" aria-live="polite"></div><div class="game-result" id="game-result" hidden><span class="modal-kicker" id="result-kicker">FIM DE ROUND</span><h2 id="result-title"></h2><p id="result-description"></p><button class="button primary" id="rematch-button">REVANCHE <span>↻</span></button><button class="text-button" id="back-selection">Voltar à seleção</button></div></div>
+    <div class="game-controls"><div><span class="control-tag">P1 <span id="you-tag"></span></span><span><kbd>A</kbd><kbd>D</kbd> mover</span><span><kbd>W</kbd> pular</span><span><kbd>F</kbd> soco</span><span><kbd>G</kbd> especial</span><span><kbd>S</kbd> defender</span></div><div id="p2-controls"><span class="control-tag">P2</span><span><kbd>←</kbd><kbd>→</kbd> mover</span><span><kbd>↑</kbd> pular</span><span><kbd>K</kbd> soco</span><span><kbd>L</kbd> especial</span><span><kbd>↓</kbd> defender</span></div></div>
+    <div class="touch-controls"><div><button data-input="left" aria-label="Mover à esquerda">◀</button><button data-input="right" aria-label="Mover à direita">▶</button><button data-input="jump" aria-label="Pular">↑</button></div><div><button data-input="block">DEF</button><button data-input="attack">SOCO</button><button class="touch-special" data-input="special">ESP</button></div></div>
+  </section>
+  <div class="toast" id="toast" role="status" hidden></div>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
