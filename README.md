@@ -28,8 +28,28 @@ O servidor HTTP e WebSocket escuta na porta `3000`, em `0.0.0.0`. `PORT` e `HOST
 | Soco | F | K |
 | Especial | G | L |
 | Defender | S | ↓ |
+| Arrancada (dash) | Shift esquerdo | Shift direito |
 
-O round dura 60 segundos. Vence quem zerar a vida adversária ou tiver mais vida ao final do tempo. O especial gasta 50 de energia, que se regenera. Golpes exigem proximidade; defender reduz o dano recebido. Efeitos sonoros podem ser ativados no cabeçalho.
+A partida dura **2min30s completos de combate**, além da contagem inicial. Cada nocaute vale um ponto; o lutador retorna após 2 segundos com vida cheia e breve proteção. Vence quem tiver mais nocautes quando o tempo acabar. A vida restante desempata; com os dois critérios iguais, há empate. Um nocaute não encerra a partida antes do tempo.
+
+A movimentação tem aceleração, desaceleração, controle aéreo e salto com tolerância ao apertar perto da aterrissagem. Use **Shift** com uma direção para uma arrancada curta; a recarga é de 0,9 segundo. No celular, há um botão **DASH**.
+
+O especial gasta 50 de energia e lança o adversário ao chão. A vítima fica protegida de novos golpes durante a queda e se levanta em seguida. Defesa ou escudo reduzem o dano e evitam essa queda. Acertos geram partículas de sangue em pixel art; golpes defendidos produzem faíscas. O som pode ser ativado no cabeçalho.
+
+### Itens que caem na arena
+
+O primeiro item cai após 4 segundos de combate; os próximos chegam em intervalos aleatórios de 8 a 12 segundos. Passe perto de um item para coletá-lo, inclusive no ar. Itens no chão desaparecem após 14 segundos. Os bônus aparecem junto à barra de vida.
+
+| Item | Efeito |
+| --- | --- |
+| Vida extra | Recupera 30 HP, até 100. |
+| Turbo | Movimento 45% mais rápido por 8 segundos. |
+| Escudo | Reduz dano e impede derrubadas por 8 segundos. |
+| Carga extra | Recupera 60 de energia, até 100. |
+| Fúria | Golpes 35% mais fortes por 8 segundos. |
+| Superpulo | Impulso do salto 25% maior por 8 segundos. |
+
+Coletar o mesmo bônus renova sua duração. Ele não acumula multiplicadores; um nocaute remove os bônus ativos. Os itens e efeitos são decididos pelo servidor no modo online.
 
 ## Verificar
 

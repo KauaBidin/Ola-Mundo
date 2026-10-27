@@ -12,7 +12,7 @@ const characterExists = id => CHARACTERS.some(character => character.id === id);
 const send = (socket, data) => {
   if (socket.readyState === WebSocket.OPEN && socket.bufferedAmount < 512_000) socket.send(JSON.stringify(data));
 };
-const emptyInput = () => ({ left: false, right: false, jump: false, attack: false, special: false, block: false });
+const emptyInput = () => ({ left: false, right: false, jump: false, attack: false, special: false, block: false, dash: false });
 
 export function createGameServer({ port = Number(process.env.PORT || 3000), host = process.env.HOST || '0.0.0.0' } = {}) {
   const rooms = new Map();
@@ -67,6 +67,7 @@ export function createGameServer({ port = Number(process.env.PORT || 3000), host
 
   function start(room) {
     room.state = createMatch(room.players.map(player => player.characterId));
+    room.lastStep = performance.now();
     room.players.forEach(player => { player.input = emptyInput(); player.rematch = false; });
     notifyRoom(room);
     room.players.forEach(player => send(player.socket, { type: 'state', state: room.state }));
@@ -133,10 +134,15 @@ export function createGameServer({ port = Number(process.env.PORT || 3000), host
 
   const interval = setInterval(() => {
     const now = Date.now();
+    const tickTime = performance.now();
     for (const room of rooms.values()) {
       if (!room.state || room.state.phase === 'finished') continue;
       room.players.forEach(player => { if (now - player.lastInput > 1000) player.input = emptyInput(); });
-      stepMatch(room.state, room.players.map(player => player.input), 1 / 30);
+      const elapsed = Math.max(0, (tickTime - room.lastStep) / 1000);
+      room.lastStep = tickTime;
+      // Timer callbacks are not exact clocks: integrate measured monotonic time
+      // so a nominal 33 ms callback cannot shorten a 150-second match.
+      stepMatch(room.state, room.players.map(player => player.input), elapsed);
       room.players.forEach(player => send(player.socket, { type: 'state', state: room.state }));
       if (room.state.phase === 'finished') notifyRoom(room);
     }

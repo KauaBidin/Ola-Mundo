@@ -147,40 +147,137 @@ export function portraitSVG(character, small=false) {
 export function drawFighter(ctx, player, x, ground, scale, time) {
   const accent=LOOKS[player.characterId]?.accent||'#fff';
   const crop=cropFor(player.characterId), fighterSheet=SHEETS[crop.sheet].image;
-  ctx.save();ctx.translate(x,ground-player.y*.62);ctx.scale(player.facing*scale,scale);
-  if(player.action==='special') {ctx.fillStyle=accent+'35';ctx.fillRect(-35,-105,95,108);}
-  if(player.action==='block') {ctx.strokeStyle=accent+'bb';ctx.lineWidth=2;ctx.beginPath();ctx.ellipse(24,-61,21,40,0,-1.4,1.4);ctx.stroke();}
-  if(fighterSheet?.complete && fighterSheet.naturalWidth) {
-    const walking=player.action==='walk', attacking=player.action==='attack'||player.action==='special';
-    const duration=player.action==='special'?.36:.2;
-    const impact=attacking?Math.sin(Math.PI*Math.max(0,Math.min(1,1-player.attackTimer/duration))):0;
-    const bob=walking?-Math.abs(Math.sin(time*13))*2.2:player.action==='idle'?Math.sin(time*3)*.7:0;
-    const width=crop.width/crop.height*110;
-    ctx.save();ctx.translate(impact*9,bob);
-    if(player.hp<=0)ctx.rotate(-1.12);
-    else if(player.action==='hit'){ctx.rotate(.08);ctx.globalAlpha=.72;}
+  const ready=!!(fighterSheet?.complete && fighterSheet.naturalWidth);
+  const width=ready?crop.width/crop.height*110:66;
+  const buffs=player.buffs||{};
+  const walking=player.action==='walk', dashing=player.action==='dash'||player.dashTimer>0;
+  const knockedOut=player.hp<=0||player.action==='knockout'||player.respawnTimer>0;
+  const down=knockedOut||player.action==='down'||player.downTimer>0;
+  const attacking=!down&&(player.action==='attack'||player.action==='special');
+  const duration=player.action==='special'?.36:.2;
+  const impact=attacking?Math.sin(Math.PI*Math.max(0,Math.min(1,1-player.attackTimer/duration))):0;
+  const bob=down?0:walking?-Math.abs(Math.sin(time*13))*1.8:player.action==='idle'?Math.sin(time*3)*.65:0;
+  const fallback=ready?null:sprite(player.characterId,player.action,time);
+  const body=()=>{
+    if(ready)ctx.drawImage(fighterSheet,crop.x,crop.y,crop.width,crop.height,-width/2,-110,width,110);
+    else {
+      ctx.save();ctx.translate(-34,-110);
+      for(const [rx,ry,w,h,color] of fallback){ctx.fillStyle=color;ctx.fillRect(rx,ry,w,h);}
+      ctx.restore();
+    }
+  };
+
+  ctx.save();ctx.translate(x,ground-(player.y||0)*.62);ctx.scale(player.facing*scale,scale);
+  // Colored trails and auras stay behind the fighter instead of obscuring the outfit.
+  if(!down && (dashing || (buffs.speed>0 && walking))) {
+    const trails=dashing?3:2;
+    for(let n=trails;n>=1;n--){ctx.save();ctx.translate(-n*(dashing?11:7),bob);ctx.globalAlpha=.13/n;body();ctx.restore();}
+    ctx.strokeStyle=dashing?accent:'#ffe078';ctx.lineWidth=1.5;ctx.globalAlpha=.7;
+    for(let n=0;n<3;n++){ctx.beginPath();ctx.moveTo(-width/2-10-n*3,-35-n*22);ctx.lineTo(-width/2-25-n*7,-35-n*22);ctx.stroke();}
+    ctx.globalAlpha=1;
+  }
+  if(buffs.rage>0 && !knockedOut) {
+    const glow=ctx.createRadialGradient(0,-54,12,0,-54,68);
+    glow.addColorStop(0,'#ff853715');glow.addColorStop(.6,'#ff853725');glow.addColorStop(1,'#ff853700');
+    ctx.fillStyle=glow;ctx.fillRect(-68,-122,136,136);
+    for(let n=0;n<5;n++){const lift=(time*28+n*13)%45;ctx.fillStyle=n%2?'#ffb15370':'#ff6b3a80';ctx.fillRect((n-2)*13,-4-lift,3,5);}
+  }
+  if(buffs.shield>0 && !knockedOut) {
+    ctx.fillStyle='#72d4ff0d';ctx.beginPath();ctx.ellipse(0,-55,width/2+8,62,0,0,Math.PI*2);ctx.fill();
+  }
+  if(buffs.jump>0 && !down) {
+    ctx.strokeStyle='#f3a2ee88';ctx.lineWidth=1;ctx.beginPath();ctx.ellipse(0,-2,25,5,0,0,Math.PI*2);ctx.stroke();
+    for(const side of [-1,1]){ctx.beginPath();ctx.moveTo(side*23-3,-9);ctx.lineTo(side*23,-13);ctx.lineTo(side*23+3,-9);ctx.stroke();}
+  }
+
+  ctx.save();ctx.translate(impact*9,bob);
+  if(down) {
+    let angle=Math.PI/2;
+    if(!knockedOut) {
+      const remaining=Math.max(0,player.downTimer||0);
+      const progress=1-Math.min(1,remaining/1.15);
+      angle=Math.min(Math.PI/2,.4+progress*1.6);
+      if((player.y||0)<=0 && remaining<.8)angle=Math.PI/2;
+      if((player.y||0)<=0 && remaining>0 && remaining<.22)angle=remaining/.22*Math.PI/2;
+    }
+    // Rotate around the body center and keep the resting body's lower edge on the floor.
+    const sine=Math.sin(angle), centerY=-55*Math.cos(angle)-width/2*sine;
+    ctx.translate(0,centerY);ctx.rotate(-angle);ctx.translate(0,55);
+    if(knockedOut)ctx.globalAlpha=.66+Math.sin(time*4)*.12;
+  } else {
+    if(player.action==='hit'){ctx.rotate(.08);ctx.globalAlpha=.76;}
+    else if(dashing)ctx.rotate(-.16);
     else if(player.action==='jump')ctx.rotate(-.045);
     else if(walking)ctx.rotate(Math.sin(time*13)*.018);
     else if(attacking)ctx.rotate(-impact*.055);
+    if(player.invulnerableTimer>0)ctx.globalAlpha*=.7+Math.sin(time*6)*.13;
     if(player.action==='block')ctx.scale(1,.93);
+    else if(walking)ctx.scale(1+Math.sin(time*13)*.008,1-Math.abs(Math.sin(time*13))*.008);
     else ctx.scale(1+impact*.04,1-impact*.025);
-    ctx.drawImage(fighterSheet,crop.x,crop.y,crop.width,crop.height,-width/2,-110,width,110);
-    ctx.restore();
-    if(attacking) {
-      const special=player.action==='special';
-      ctx.strokeStyle=accent;ctx.fillStyle=accent;ctx.globalAlpha=.35+impact*.65;
-      ctx.lineWidth=special?3:2;
-      ctx.beginPath();ctx.ellipse(20+impact*17,-59,special?43:30,special?26:16,0,-1.1,1.05);ctx.stroke();
-      for(let i=0;i<(special?5:3);i++)ctx.fillRect(33+impact*13+i*6,-69+i*5,5+(special?4:0),2);
-      ctx.globalAlpha=1;
-    }
-  } else {
-    const bob=player.action==='idle'?Math.round(Math.sin(time*3)):0;
-    ctx.translate(-34,-110+bob);
-    for(const [rx,ry,w,h,color] of sprite(player.characterId,player.action,time)){ctx.fillStyle=color;ctx.fillRect(rx,ry,w,h);}
-    if(player.hp<=0){ctx.fillStyle='#f4787a44';ctx.fillRect(19,10,32,90);}
+  }
+  body();ctx.restore();
+
+  if(!down && player.action==='block') {
+    ctx.strokeStyle=accent+'bb';ctx.lineWidth=2;ctx.beginPath();ctx.ellipse(width/2-4,-61,17,40,0,-1.4,1.4);ctx.stroke();
+  }
+  if(buffs.shield>0 && !knockedOut) {
+    ctx.strokeStyle='#82d9ffbb';ctx.lineWidth=1.3;ctx.beginPath();ctx.ellipse(0,-55,width/2+8,62,0,0,Math.PI*2);ctx.stroke();
+    ctx.strokeStyle='#d5f3ff77';ctx.beginPath();ctx.ellipse(0,-55,width/2+12,66,0,-.8,.1);ctx.stroke();
+  }
+  if(player.invulnerableTimer>0 && !down) {
+    ctx.strokeStyle='#eee5ff70';ctx.lineWidth=1;ctx.beginPath();ctx.ellipse(0,-2,width/2+4,6,0,0,Math.PI*2);ctx.stroke();
+  }
+  if(attacking) {
+    const special=player.action==='special';
+    ctx.strokeStyle=accent;ctx.fillStyle=accent;ctx.globalAlpha=.35+impact*.65;ctx.lineWidth=special?3:2;
+    ctx.beginPath();ctx.ellipse(20+impact*17,-59,special?43:30,special?26:16,0,-1.1,1.05);ctx.stroke();
+    for(let i=0;i<(special?5:3);i++)ctx.fillRect(33+impact*13+i*6,-69+i*5,5+(special?4:0),2);
+    ctx.globalAlpha=1;
   }
   ctx.restore();
+}
+
+const ITEM_VISUALS = {
+  heal:{color:'#b6f269',label:'VIDA'}, speed:{color:'#ffe078',label:'TURBO'},
+  shield:{color:'#75d9ff',label:'ESCUDO'}, energy:{color:'#bc91ff',label:'ENERGIA'},
+  rage:{color:'#ff9a63',label:'FÚRIA'}, jump:{color:'#f2a1ea',label:'SUPERPULO'},
+};
+
+export function drawItems(ctx, items=[], time=0) {
+  for(const item of items) {
+    const visual=ITEM_VISUALS[item.type]||{color:'#e9dfff',label:'ITEM'};
+    const phase=typeof item.id==='number'?item.id:0;
+    const x=70+item.x*1.06, grounded=(item.y||0)<=0;
+    const y=500-(item.y||0)*.62-19+(grounded?Math.sin(time*3+phase)*1.5:0);
+    ctx.save();
+    ctx.fillStyle='#09061055';ctx.beginPath();ctx.ellipse(x,503,18,4,0,0,Math.PI*2);ctx.fill();
+    ctx.translate(x,y);
+    if(grounded && item.ttl<3)ctx.globalAlpha=.55+Math.sin(time*6)**2*.4;
+    if(!grounded) {
+      // A small pixel parachute makes a falling pickup readable before it lands.
+      ctx.strokeStyle=visual.color+'88';ctx.lineWidth=1;
+      ctx.beginPath();ctx.moveTo(-20,-39);ctx.lineTo(-11,-14);ctx.moveTo(20,-39);ctx.lineTo(11,-14);ctx.moveTo(0,-43);ctx.lineTo(0,-16);ctx.stroke();
+      ctx.fillStyle=visual.color+'25';ctx.beginPath();ctx.moveTo(-24,-39);ctx.lineTo(-18,-48);ctx.lineTo(-9,-53);ctx.lineTo(9,-53);ctx.lineTo(18,-48);ctx.lineTo(24,-39);ctx.closePath();ctx.fill();
+      ctx.strokeStyle=visual.color+'aa';ctx.stroke();
+    }
+    ctx.fillStyle=visual.color+'12';ctx.fillRect(-21,-21,42,42);
+    ctx.fillStyle='#16111fec';ctx.fillRect(-16,-16,32,32);
+    ctx.strokeStyle=visual.color;ctx.lineWidth=2;ctx.strokeRect(-16,-16,32,32);
+    ctx.fillStyle=visual.color+'30';ctx.fillRect(-13,-13,26,3);
+    ctx.fillStyle=visual.color;ctx.strokeStyle=visual.color;ctx.lineWidth=2;
+    if(item.type==='heal') {ctx.fillRect(-3,-10,6,20);ctx.fillRect(-10,-3,20,6);}
+    else if(item.type==='speed') {ctx.beginPath();ctx.moveTo(2,-11);ctx.lineTo(-8,2);ctx.lineTo(-1,2);ctx.lineTo(-3,11);ctx.lineTo(9,-3);ctx.lineTo(2,-3);ctx.closePath();ctx.fill();}
+    else if(item.type==='shield') {ctx.beginPath();ctx.moveTo(0,-11);ctx.lineTo(10,-6);ctx.lineTo(8,4);ctx.lineTo(0,11);ctx.lineTo(-8,4);ctx.lineTo(-10,-6);ctx.closePath();ctx.stroke();ctx.beginPath();ctx.moveTo(-4,0);ctx.lineTo(-1,4);ctx.lineTo(5,-4);ctx.stroke();}
+    else if(item.type==='energy') {ctx.strokeRect(-9,-8,16,16);ctx.fillRect(8,-3,3,6);ctx.fillRect(-6,-5,3,10);ctx.fillRect(-1,-5,3,10);ctx.fillRect(4,-5,1,10);}
+    else if(item.type==='rage') {ctx.fillRect(-8,-3,17,11);ctx.fillRect(-7,-8,4,6);ctx.fillRect(-2,-9,4,7);ctx.fillRect(3,-7,4,6);ctx.fillRect(-10,1,5,5);ctx.fillRect(-4,8,10,3);ctx.fillStyle='#16111f';ctx.fillRect(-5,-3,1,4);ctx.fillRect(0,-3,1,4);ctx.fillRect(5,-2,1,3);}
+    else if(item.type==='jump') {ctx.fillRect(-3,-1,6,12);ctx.beginPath();ctx.moveTo(-10,-1);ctx.lineTo(0,-12);ctx.lineTo(10,-1);ctx.closePath();ctx.fill();}
+    else {ctx.fillRect(-3,-8,6,16);ctx.fillRect(-8,-3,16,6);}
+    ctx.font='bold 9px monospace';ctx.textAlign='center';ctx.textBaseline='alphabetic';
+    const labelWidth=ctx.measureText(visual.label).width+10;
+    ctx.fillStyle='#120d1ced';ctx.fillRect(-labelWidth/2,20,labelWidth,14);
+    ctx.fillStyle=visual.color;ctx.fillText(visual.label,0,30);
+    ctx.restore();
+  }
 }
 
 export function drawArena(ctx,w,h,time) {

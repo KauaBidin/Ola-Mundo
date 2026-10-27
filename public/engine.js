@@ -8,18 +8,36 @@ export const CHARACTERS = [
 ];
 
 export const ARENA_WIDTH = 1000;
+export const ROUND_DURATION = 150;
+export const ITEM_TYPES = [
+  { id: 'heal', label: 'Vida extra', short: '+30 HP', color: '#b6f269', duration: 0, description: 'Recupera 30 de vida.' },
+  { id: 'speed', label: 'Turbo', short: 'TURBO', color: '#ffe078', duration: 8, description: 'Movimento 45% mais rápido por 8 segundos.' },
+  { id: 'shield', label: 'Escudo', short: 'ESCUDO', color: '#75d9ff', duration: 8, description: 'Reduz dano e evita quedas por 8 segundos.' },
+  { id: 'energy', label: 'Carga extra', short: '+60 EN', color: '#bc91ff', duration: 0, description: 'Recupera 60 de energia.' },
+  { id: 'rage', label: 'Fúria', short: 'FÚRIA', color: '#ff9a63', duration: 8, description: 'Golpes 35% mais fortes por 8 segundos.' },
+  { id: 'jump', label: 'Superpulo', short: 'PULO+', color: '#f2a1ea', duration: 8, description: 'Impulso do pulo 25% maior por 8 segundos.' },
+];
 const characterFor = id => CHARACTERS.find(character => character.id === id) || CHARACTERS[0];
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+const approach = (value, target, amount) => value < target ? Math.min(target, value + amount) : Math.max(target, value - amount);
+const EPSILON = 0.000001;
+const GRAVITY = 1750;
+const timer = (value, dt) => Math.max(0, value - dt) < EPSILON ? 0 : Math.max(0, value - dt);
+const emptyBuffs = () => ({ speed: 0, shield: 0, rage: 0, jump: 0 });
+const spawnX = index => index ? 720 : 280;
 
-export function createMatch(ids = ['emerzon', 'douglas']) {
+export function createMatch(ids = ['emerzon', 'douglas'], { seed = Math.floor(Math.random() * 0xffffffff) } = {}) {
   return {
-    phase: 'countdown', countdown: 3, timeLeft: 60, winner: null,
-    elapsed: 0, eventId: 0, events: [],
+    phase: 'countdown', countdown: 3, timeLeft: ROUND_DURATION, winner: null,
+    elapsed: 0, eventId: 0, events: [], scores: [0, 0], items: [],
+    dropTimer: 4, itemId: 0, randomSeed: (Number(seed) >>> 0) || 0x9e3779b9,
     players: [0, 1].map(index => ({
-      characterId: characterFor(ids[index]).id, x: index ? 720 : 280,
+      characterId: characterFor(ids[index]).id, x: spawnX(index),
       y: 0, vx: 0, vy: 0, facing: index ? -1 : 1, hp: 100, energy: 100,
-      action: 'idle', attackTimer: 0, attackCooldown: 0,
-      specialCooldown: 0, hitTimer: 0, previousJump: false,
+      action: 'idle', attackTimer: 0, attackCooldown: 0, specialCooldown: 0,
+      hitTimer: 0, previousJump: false, jumpBuffer: 0, coyoteTimer: 0.09,
+      dashTimer: 0, dashCooldown: 0, previousDash: false, dashDirection: index ? -1 : 1,
+      downTimer: 0, respawnTimer: 0, invulnerableTimer: 0, buffs: emptyBuffs(),
     })),
   };
 }
@@ -28,111 +46,215 @@ function event(state, type, data = {}) {
   state.events.push({ id: ++state.eventId, type, ...data });
 }
 
-export function stepMatch(state, inputs = [{}, {}], dt = 1 / 60) {
-  if (!Number.isFinite(dt) || dt <= 0 || state.phase === 'finished') return state;
-  dt = Math.min(dt, 0.05);
-  state.events = [];
+function random(state) {
+  let value = state.randomSeed;
+  value ^= value << 13; value ^= value >>> 17; value ^= value << 5;
+  state.randomSeed = value >>> 0;
+  return state.randomSeed / 0x100000000;
+}
+
+function respawn(state, index) {
+  const player = state.players[index];
+  Object.assign(player, {
+    x: spawnX(index), y: 0, vx: 0, vy: 0, hp: 100, energy: 100,
+    action: 'idle', attackTimer: 0, attackCooldown: 0, specialCooldown: 0,
+    hitTimer: 0, downTimer: 0, respawnTimer: 0, invulnerableTimer: 1.5,
+    dashTimer: 0, dashCooldown: 0, jumpBuffer: 0, coyoteTimer: 0.09,
+    buffs: emptyBuffs(),
+  });
+  event(state, 'respawn', { player: index, x: player.x, y: 0 });
+}
+
+function moveBody(player, dt) {
+  const nextX = player.x + player.vx * dt;
+  player.x = clamp(nextX, 40, ARENA_WIDTH - 40);
+  if (player.x !== nextX) player.vx = 0;
+  if (player.y > 0 || player.vy > 0) {
+    const nextY = player.y + player.vy * dt - GRAVITY * dt * dt / 2;
+    player.vy -= GRAVITY * dt;
+    player.y = Math.max(0, nextY);
+    if (!player.y) player.vy = 0;
+  }
+}
+
+function movePlayer(state, index, input, dt, strikes) {
+  const player = state.players[index], opponent = state.players[1 - index];
+  const character = characterFor(player.characterId);
+  const wasDown = player.action === 'down' || player.downTimer > 0;
+  for (const key of ['attackTimer', 'attackCooldown', 'specialCooldown', 'hitTimer', 'dashTimer', 'dashCooldown', 'downTimer', 'invulnerableTimer', 'jumpBuffer']) player[key] = timer(player[key], dt);
+  for (const key of Object.keys(player.buffs)) player.buffs[key] = timer(player.buffs[key], dt);
+  player.energy = Math.min(100, player.energy + dt * 10);
+  const jumpPressed = !!input.jump && !player.previousJump;
+  const dashPressed = !!input.dash && !player.previousDash;
+  player.previousJump = !!input.jump; player.previousDash = !!input.dash;
+
+  if (player.respawnTimer > 0 || player.hp <= 0) {
+    player.respawnTimer = timer(player.respawnTimer, dt);
+    if (!player.respawnTimer) { respawn(state, index); return; }
+    player.action = 'knockout';
+    player.vx = approach(player.vx, 0, dt * 340);
+    moveBody(player, dt);
+    return;
+  }
+  player.facing = player.x <= opponent.x ? 1 : -1;
+  if (wasDown) {
+    player.dashTimer = 0; player.jumpBuffer = 0;
+    player.vx = approach(player.vx, 0, dt * 400);
+    moveBody(player, dt);
+    if (!player.downTimer && !player.y) {
+      player.action = 'idle'; player.invulnerableTimer = Math.max(player.invulnerableTimer, 0.15);
+    } else {
+      player.action = 'down'; player.invulnerableTimer = Math.max(player.invulnerableTimer, dt * 2);
+    }
+    return;
+  }
+  const grounded = player.y <= 0;
+  player.coyoteTimer = grounded ? 0.09 : timer(player.coyoteTimer, dt);
+  if (jumpPressed) player.jumpBuffer = 0.12;
+  if (player.hitTimer > 0) {
+    player.action = 'hit'; player.dashTimer = 0;
+    player.vx = approach(player.vx, 0, dt * 180);
+    moveBody(player, dt);
+    return;
+  }
+
+  const blocking = !!input.block && grounded && !player.attackTimer && !player.dashTimer;
+  const direction = Number(!!input.right) - Number(!!input.left);
+  if (blocking) {
+    player.action = 'block'; player.vx = approach(player.vx, 0, 3800 * dt);
+  } else {
+    if (player.jumpBuffer > 0 && player.coyoteTimer > 0) {
+      player.vy = 680 * (player.buffs.jump > 0 ? 1.25 : 1);
+      player.jumpBuffer = 0; player.coyoteTimer = 0;
+    }
+    if (dashPressed && !player.dashCooldown && !player.attackTimer) {
+      player.dashTimer = 0.14; player.dashCooldown = 0.9;
+      player.dashDirection = direction || player.facing;
+      event(state, 'dash', { player: index, direction: player.dashDirection });
+    }
+    if (player.dashTimer > 0) {
+      player.vx = player.dashDirection * 680 * (player.buffs.speed > 0 ? 1.15 : 1);
+      player.action = 'dash';
+    } else {
+      const speed = (205 + character.stats.speed * 20) * (player.buffs.speed > 0 ? 1.45 : 1);
+      const desired = direction * speed * (player.attackTimer > 0 ? 0.45 : 1);
+      const acceleration = direction ? (grounded ? 2200 : 1400) : (grounded ? 2800 : 650);
+      player.vx = approach(player.vx, desired, acceleration * dt);
+      if (!player.attackTimer) player.action = player.y > 0 || player.vy > 0 ? 'jump' : Math.abs(player.vx) > 8 ? 'walk' : 'idle';
+    }
+    if (!player.attackTimer && !player.dashTimer) {
+      if (input.special && !player.specialCooldown && player.energy >= 50) {
+        player.energy -= 50; player.specialCooldown = 1.6;
+        player.attackCooldown = 0.65; player.attackTimer = 0.36; player.action = 'special';
+        strikes.push({ attacker: index, special: true }); event(state, 'special', { player: index });
+      } else if (input.attack && !player.attackCooldown) {
+        player.attackCooldown = 0.4; player.attackTimer = 0.2; player.action = 'attack';
+        strikes.push({ attacker: index, special: false }); event(state, 'punch', { player: index });
+      }
+    }
+  }
+  moveBody(player, dt);
+}
+
+function updateItems(state, dt) {
+  state.dropTimer = timer(state.dropTimer, dt);
+  if (!state.dropTimer) {
+    if (state.items.length < 4) {
+      const type = ITEM_TYPES[Math.floor(random(state) * ITEM_TYPES.length)].id;
+      const item = { id: ++state.itemId, type, x: 85 + random(state) * 830, y: 560, vy: -30, ttl: 14 };
+      state.items.push(item);
+      event(state, 'drop', { itemId: item.id, itemType: type, x: item.x, y: item.y });
+    }
+    state.dropTimer = 8 + random(state) * 4;
+  }
+  const retained = [];
+  for (const item of state.items) {
+    if (item.y > 0) {
+      item.y = Math.max(0, item.y + item.vy * dt - 550 * dt * dt / 2);
+      item.vy -= 550 * dt;
+      if (!item.y) item.vy = 0;
+    } else item.ttl = timer(item.ttl, dt);
+    if (!item.ttl) continue;
+    const candidates = state.players.map((player, index) => ({ player, index, distance: Math.abs(player.x - item.x) }))
+      .filter(({ player, distance }) => player.hp > 0 && !player.respawnTimer && !player.downTimer && player.action !== 'down' && distance <= 50 && Math.abs(player.y - item.y) <= 65)
+      .sort((a, b) => a.distance - b.distance || ((a.index + item.id) % 2) - ((b.index + item.id) % 2));
+    const collector = candidates[0];
+    if (!collector) { retained.push(item); continue; }
+    const { player, index } = collector;
+    if (item.type === 'heal') player.hp = Math.min(100, player.hp + 30);
+    else if (item.type === 'energy') player.energy = Math.min(100, player.energy + 60);
+    else if (Object.hasOwn(player.buffs, item.type)) player.buffs[item.type] = 8;
+    event(state, 'pickup', { player: index, itemType: item.type, x: item.x, y: item.y });
+  }
+  state.items = retained;
+}
+
+function simulate(state, inputs, dt) {
   state.elapsed += dt;
   if (state.phase === 'countdown') {
-    state.countdown = Math.max(0, state.countdown - dt);
-    if (state.countdown < 0.00001) {
-      state.countdown = 0;
-      state.phase = 'playing';
-      event(state, 'start');
-    }
-    return state;
+    state.countdown = timer(state.countdown, dt);
+    if (!state.countdown) { state.phase = 'playing'; event(state, 'start'); }
+    return;
   }
-
-  state.timeLeft = Math.max(0, state.timeLeft - dt);
+  state.timeLeft = timer(state.timeLeft, dt);
   const strikes = [];
-  for (let index = 0; index < 2; index++) {
-    const player = state.players[index];
-    const opponent = state.players[1 - index];
-    const input = inputs[index] || {};
-    const character = characterFor(player.characterId);
-    player.facing = player.x <= opponent.x ? 1 : -1;
-    player.attackTimer = Math.max(0, player.attackTimer - dt);
-    player.attackCooldown = Math.max(0, player.attackCooldown - dt);
-    player.specialCooldown = Math.max(0, player.specialCooldown - dt);
-    player.hitTimer = Math.max(0, player.hitTimer - dt);
-    player.energy = Math.min(100, player.energy + dt * 10);
-
-    const grounded = player.y <= 0;
-    const blocking = !!input.block && grounded && player.hitTimer === 0 && player.attackTimer === 0;
-    if (player.hitTimer > 0) player.action = 'hit';
-    else if (player.attackTimer === 0) {
-      if (blocking) {
-        player.action = 'block';
-        player.vx = 0;
-      } else {
-        const direction = Number(!!input.right) - Number(!!input.left);
-        player.vx = direction * (205 + character.stats.speed * 20);
-        player.action = direction ? 'walk' : 'idle';
-        if (input.jump && !player.previousJump && grounded) {
-          player.vy = 680;
-          player.action = 'jump';
-        }
-        if (input.special && player.specialCooldown === 0 && player.energy >= 50) {
-          player.energy -= 50;
-          player.specialCooldown = 1.6;
-          player.attackCooldown = 0.65;
-          player.attackTimer = 0.36;
-          player.action = 'special';
-          strikes.push({ attacker: index, special: true });
-          event(state, 'special', { player: index });
-        } else if (input.attack && player.attackCooldown === 0) {
-          player.attackCooldown = 0.45;
-          player.attackTimer = 0.2;
-          player.action = 'attack';
-          strikes.push({ attacker: index, special: false });
-          event(state, 'punch', { player: index });
-        }
-      }
-    } else player.vx *= 0.8;
-
-    player.previousJump = !!input.jump;
-    player.x = clamp(player.x + player.vx * dt, 40, ARENA_WIDTH - 40);
-    player.y = Math.max(0, player.y + player.vy * dt);
-    if (player.y > 0 || player.vy > 0) player.vy -= 1750 * dt;
-    if (player.y === 0 && player.vy < 0) player.vy = 0;
-    if (player.y > 0 && player.attackTimer === 0 && player.hitTimer === 0) player.action = 'jump';
-  }
-
-  // Keep grounded bodies separate without stopping an airborne cross-up.
+  for (let index = 0; index < 2; index++) movePlayer(state, index, inputs[index] || {}, dt, strikes);
   const [a, b] = state.players;
-  if (Math.abs(a.y - b.y) < 95 && Math.abs(a.x - b.x) < 64) {
+  if (a.hp > 0 && b.hp > 0 && !a.invulnerableTimer && !b.invulnerableTimer && a.action !== 'down' && b.action !== 'down' && Math.abs(a.y - b.y) < 95 && Math.abs(a.x - b.x) < 64) {
     const direction = a.x <= b.x ? 1 : -1;
     const overlap = (64 - Math.abs(a.x - b.x)) / 2;
-    a.x = clamp(a.x - direction * overlap, 40, 960);
-    b.x = clamp(b.x + direction * overlap, 40, 960);
+    a.x = clamp(a.x - direction * overlap, 40, 960); b.x = clamp(b.x + direction * overlap, 40, 960);
   }
-
-  // Resolve both attacks after input processing so simultaneous hits are fair.
+  // Snapshot all connecting strikes before applying either: a simultaneous KO
+  // or knockdown cannot cancel the opponent's already-started hit.
+  const hits = [];
   for (const strike of strikes) {
-    const source = state.players[strike.attacker];
-    const targetIndex = 1 - strike.attacker;
-    const target = state.players[targetIndex];
-    const reach = strike.special ? 195 : 118;
-    if (Math.abs(source.x - target.x) > reach || Math.abs(source.y - target.y) > 105) continue;
-    const power = characterFor(source.characterId).stats.power;
-    const defense = characterFor(target.characterId).stats.defense;
-    const blocked = target.action === 'block';
-    const damage = (strike.special ? 17 + power * 2 : 7 + power * 1.5) * (1 - defense * 0.025);
-    const actual = Math.round(damage * (blocked ? 0.2 : 1));
-    target.hp = Math.max(0, target.hp - actual);
-    if (!blocked) {
-      target.hitTimer = 0.18;
-      target.action = 'hit';
-      target.vx = source.facing * (strike.special ? 260 : 110);
-    }
-    target.x = clamp(target.x + source.facing * (blocked ? 7 : strike.special ? 40 : 14), 40, 960);
-    event(state, blocked ? 'block' : 'hit', { player: targetIndex, attacker: strike.attacker, damage: actual, special: strike.special, x: target.x, y: target.y });
+    const source = state.players[strike.attacker], targetIndex = 1 - strike.attacker, target = state.players[targetIndex];
+    if (target.hp <= 0 || target.respawnTimer || target.downTimer || target.action === 'down' || target.invulnerableTimer > 0) continue;
+    if (Math.abs(source.x - target.x) > (strike.special ? 195 : 118) || Math.abs(source.y - target.y) > 105) continue;
+    const blocked = target.action === 'block', shielded = target.buffs.shield > 0;
+    const power = characterFor(source.characterId).stats.power, defense = characterFor(target.characterId).stats.defense;
+    const baseDamage = (strike.special ? 13 + power * 1.8 : 4 + power * 1.1) * (1 - defense * 0.025);
+    const damage = Math.max(1, Math.round(baseDamage * (source.buffs.rage > 0 ? 1.35 : 1) * (blocked ? 0.2 : shielded ? 0.35 : 1)));
+    hits.push({ ...strike, targetIndex, damage, blocked: blocked || shielded, knockdown: strike.special && !blocked && !shielded, direction: source.facing });
   }
-
-  if (a.hp <= 0 || b.hp <= 0 || state.timeLeft === 0) {
+  for (const hit of hits) {
+    const target = state.players[hit.targetIndex];
+    target.hp = Math.max(0, target.hp - hit.damage);
+    if (hit.knockdown) {
+      target.downTimer = 1.15; target.action = 'down'; target.vx = hit.direction * 480; target.vy = 460;
+      target.invulnerableTimer = 1.15; target.dashTimer = 0; target.attackTimer = 0;
+    } else if (!hit.blocked) {
+      target.hitTimer = 0.14; target.action = 'hit'; target.vx = hit.direction * 150;
+      target.dashTimer = 0; target.attackTimer = 0;
+    } else target.vx += hit.direction * 25;
+    event(state, hit.blocked ? 'block' : 'hit', {
+      player: hit.targetIndex, attacker: hit.attacker, damage: hit.damage, special: hit.special,
+      direction: hit.direction, knockdown: hit.knockdown, x: target.x, y: target.y,
+    });
+    if (!target.hp) {
+      state.scores[hit.attacker]++;
+      target.action = 'knockout'; target.respawnTimer = 2; target.downTimer = 0; target.hitTimer = 0;
+      event(state, 'ko', { player: hit.targetIndex, attacker: hit.attacker, x: target.x, y: target.y });
+    }
+  }
+  updateItems(state, dt);
+  if (!state.timeLeft) {
     state.phase = 'finished';
-    state.winner = a.hp === b.hp ? 'draw' : a.hp > b.hp ? 0 : 1;
+    state.winner = state.scores[0] === state.scores[1]
+      ? a.hp === b.hp ? 'draw' : a.hp > b.hp ? 0 : 1
+      : state.scores[0] > state.scores[1] ? 0 : 1;
     event(state, 'finish', { winner: state.winner });
   }
+}
+
+export function stepMatch(state, inputs = [{}, {}], dt = 1 / 60) {
+  if (!Number.isFinite(dt) || dt <= 0 || state.phase === 'finished') return state;
+  state.events = [];
+  // Bounded substeps keep acceleration, airborne control and knockback stable
+  // across the server's 30 Hz tick and displays running at 60/120 Hz.
+  const duration = Math.min(dt, 0.1);
+  const count = Math.ceil(duration / (1 / 120));
+  for (let tick = 0; tick < count && state.phase !== 'finished'; tick++) simulate(state, inputs, duration / count);
   return state;
 }
