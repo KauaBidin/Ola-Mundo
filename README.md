@@ -2,6 +2,8 @@
 
 Jogo de luta arcade multiplayer 1x1, em português, com pixel art original e arena de datacenter. Escolha **Emerzon (TI N2)**, **Douglas (Gerente de TI)**, **José (Analista de TI)** ou **Kauã (Aux. Procesos e automatización)**. Cada personagem tem atributos e um golpe especial próprios.
 
+Os visuais dos quatro personagens foram adaptados em pixel art a partir das fotos de referência fornecidas. A seleção e a arena usam a mesma arte, distribuída com o jogo em `public/assets/fighters-reference.png`. A imagem é carregada localmente, sem serviços de geração ou outras chamadas externas durante as partidas.
+
 ## Executar
 
 Requer Node.js 22 ou superior e npm. No diretório do repositório:
@@ -49,6 +51,7 @@ Não são necessárias credenciais, serviços externos ou variáveis obrigatóri
 - `server.js`: HTTP, salas, validação das mensagens e simulação online autoritativa.
 - `public/engine.js`: regras compartilhadas entre servidor e modo local.
 - `public/art.js`: personagens originais e cenário desenhados em SVG/Canvas.
+- `public/assets/`: arte dos quatro lutadores, compartilhada pela seleção e pelo combate.
 - `public/app.js`: seleção, salas, controles, áudio e interface da partida.
 - `public/style.css`: interface responsiva, temas dos personagens e controles de toque.
 - `tests/`: testes do motor e da integração HTTP/WebSocket.
