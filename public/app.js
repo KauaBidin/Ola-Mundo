@@ -7,7 +7,10 @@ let selected='emerzon', opponent='douglas', socket=null, connecting=null, room=n
 let state=null, mode=null, running=false, lastFrame=0, heartbeat=0, lastEvent=0;
 let sound=false, audio=null, toastTimer, pendingRequest=null;
 const inputs=[{},{}], keys=new Set(), touch=new Set(), particles=[];
-const eventQueue=[], bloodStains=[];
+const eventQueue=[];
+const bloodLayer=document.createElement('canvas');
+bloodLayer.width=1200;bloodLayer.height=600;
+const bloodCtx=bloodLayer.getContext('2d');
 let renderPositions=[], shake=0, bannerUntil=0, animationFrame=0;
 const canvas=$('arena-canvas'), ctx=canvas.getContext('2d');
 const icons={sound:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M11 5 6 9H3v6h3l5 4V5Z"/><path d="M15 8c3 2 3 6 0 8m3-11c5 4 5 10 0 14"/></svg>',muted:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M11 5 6 9H3v6h3l5 4V5Z"/><path d="m16 9 6 6m0-6-6 6"/></svg>'};
@@ -118,7 +121,7 @@ $('local-button').addEventListener('click',()=>{renderOpponents();showDialog('lo
 $('start-local').addEventListener('click',()=>startGame('local',createMatch([selected,opponent])));
 
 function resetRoundEffects(newState){
-  lastEvent=0;eventQueue.length=0;particles.length=0;bloodStains.length=0;shake=0;bannerUntil=0;
+  lastEvent=0;eventQueue.length=0;particles.length=0;bloodCtx.clearRect(0,0,1200,600);shake=0;bannerUntil=0;
   renderPositions=newState.players.map(p=>({x:p.x,y:p.y}));
   $('arena-event').hidden=true;
 }
@@ -166,13 +169,43 @@ function frame(now){
 function enqueueEvents(events=[]){
   for(const event of events){
     if(event.id<=lastEvent)continue;
-    lastEvent=event.id;eventQueue.push(event);
+    lastEvent=event.id;
+    if((event.type==='hit'||event.type==='block')&&event.damage>0)spawnBlood(event);
+    eventQueue.push(event);
   }
   if(eventQueue.length>256)eventQueue.splice(0,eventQueue.length-256);
 }
 function announce(message,color='#ad8bfa',seconds=1.7){
   $('arena-event').textContent=message;$('arena-event').style.borderColor=color;
   $('arena-event').hidden=false;bannerUntil=performance.now()+seconds*1000;
+}
+// Decals are painted once into a fixed-size layer. They never fade or get
+// evicted during a match, regardless of the number of hits or render frames.
+function stampBlood(x,y,size,color){
+  bloodCtx.fillStyle=color;
+  bloodCtx.fillRect(Math.round(x),Math.round(y),Math.ceil(size*1.7),Math.ceil(size*.55));
+  bloodCtx.fillRect(Math.round(x-size*.4),Math.round(y+size*.3),Math.ceil(size*.8),2);
+}
+function spawnBlood(event){
+  let seed=((event.id*2654435761)^(Math.round(event.x*11)*1597334677))>>>0;
+  const random=()=>{seed^=seed<<13;seed^=seed>>>17;seed^=seed<<5;return(seed>>>0)/4294967296;};
+  const special=!!event.special,blocked=event.type==='block';
+  const count=special?104:blocked?12:26;
+  const direction=event.direction||state.players[event.attacker].facing;
+  const x=70+event.x*1.06,y=500-event.y*.62-112;
+  for(let n=0;n<count;n++){
+    const color=['#e94b64','#c92b47','#9b1e3a'][n%3];
+    const size=(special?3:2)+random()*(special?4:2);
+    const vx=direction*(50+random()*(special?260:150))+(random()-.5)*(special?160:80);
+    const vy=-30-random()*(special?290:160);
+    const flight=(-vy+Math.sqrt(vy*vy+2*850*Math.max(0,499-y)))/850;
+    const floorX=Math.max(20,Math.min(1170,x+vx*flight));
+    const floorY=497+random()*(special?36:24);
+    particles.push({x,y:y+(random()-.5)*20,vx,vy,life:2.7,max:2.7,color,size,blood:true,gravity:850,floorX,floorY});
+    stampBlood(floorX,floorY,size,color);
+  }
+  // Only airborne decoration is bounded; the painted ring layer is never erased.
+  if(particles.length>900)particles.splice(0,particles.length-900);
 }
 function processEvents(){
   for(const event of eventQueue.splice(0)){
@@ -182,13 +215,8 @@ function processEvents(){
       for(let n=0;n<10;n++)particles.push({x,y,vx:(Math.random()-.5)*300,vy:(Math.random()-.6)*240,life:.4,max:.4,color:event.type==='block'?'#d9ebff':c.color,size:3+Math.random()*4});
       particles.push({x,y:y-25,vx:0,vy:-70,life:.8,max:.8,text:event.type==='block'?'DEFESA':`−${event.damage}`,color:c.color});
       if(event.type==='hit'){
-        const direction=event.direction||source.facing;
-        for(let n=0;n<(event.knockdown?30:12);n++){
-          const life=.45+Math.random()*.45;
-          particles.push({x,y:y-10,vx:direction*(60+Math.random()*170)+(Math.random()-.5)*90,vy:-60-Math.random()*190,life,max:life,color:n%3?'#e94b64':'#9b203c',size:2+Math.random()*3,blood:true,gravity:700});
-        }
         shake=Math.max(shake,event.knockdown?6:2);
-        if(event.knockdown)announce('ESPECIAL! ADVERSÁRIO AO CHÃO',c.color,1.1);
+        if(event.knockdown)announce('VOADORA! ADVERSÁRIO AO CHÃO',c.color,1.1);
       }
       beep('hit');
     }else if(event.type==='pickup'){
@@ -208,16 +236,11 @@ function processEvents(){
   }
 }
 function drawParticles(dt){
-  for(let i=bloodStains.length-1;i>=0;i--){
-    const stain=bloodStains[i];stain.life-=dt;
-    if(stain.life<=0){bloodStains.splice(i,1);continue;}
-    ctx.globalAlpha=Math.min(.65,stain.life*.2);ctx.fillStyle='#8d2340';ctx.fillRect(stain.x,stain.y,stain.size*2,2);ctx.globalAlpha=1;
-  }
   for(let i=particles.length-1;i>=0;i--){
     const p=particles[i];p.life-=dt;p.vy+=(p.gravity||0)*dt;p.x+=p.vx*dt;p.y+=p.vy*dt;
     if(p.blood&&p.y>=498){
-      bloodStains.push({x:p.x,y:498+Math.random()*7,size:p.size,life:7});
-      if(bloodStains.length>140)bloodStains.shift();particles.splice(i,1);continue;
+      // Its permanent decal was already painted in event order on contact.
+      particles.splice(i,1);continue;
     }
     if(p.life<=0){particles.splice(i,1);continue;}
     ctx.globalAlpha=Math.max(0,p.life/p.max);ctx.fillStyle=p.color;
@@ -238,7 +261,7 @@ function renderBuffs(player,index){
 function renderGame(time,dt){
   ctx.imageSmoothingEnabled=false;ctx.fillStyle='#1b1525';ctx.fillRect(0,0,1200,600);ctx.save();
   if(shake>0){ctx.translate((Math.random()-.5)*shake,(Math.random()-.5)*shake);shake=Math.max(0,shake-dt*24);}
-  drawArena(ctx,1200,600,time);drawItems(ctx,state.items||[],time);
+  drawArena(ctx,1200,600,time);ctx.drawImage(bloodLayer,0,0);drawItems(ctx,state.items||[],time);
   state.players.forEach((p,index)=>{
     const visual=renderPositions[index]||{x:p.x,y:p.y},blend=mode==='online'?1-Math.exp(-28*dt):1;
     if(p.respawnTimer<=0&&Math.abs(p.x-visual.x)<260){visual.x+=(p.x-visual.x)*blend;visual.y+=(p.y-visual.y)*blend;}

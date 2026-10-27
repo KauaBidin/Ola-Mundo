@@ -34,7 +34,9 @@ A partida dura **2min30s completos de combate**, além da contagem inicial. Cada
 
 A movimentação tem aceleração, desaceleração, controle aéreo e salto com tolerância ao apertar perto da aterrissagem. Use **Shift** com uma direção para uma arrancada curta; a recarga é de 0,9 segundo. No celular, há um botão **DASH**.
 
-O especial gasta 50 de energia e lança o adversário ao chão. A vítima fica protegida de novos golpes durante a queda e se levanta em seguida. Defesa ou escudo reduzem o dano e evitam essa queda. Acertos geram partículas de sangue em pixel art; golpes defendidos produzem faíscas. O som pode ser ativado no cabeçalho.
+O especial é uma **voadora**: gasta 50 de energia, salta e avança na direção do rival durante 0,5 segundo. O alcance de contato subiu de 195 para 250 unidades, além do avanço, e a voadora pode conectar durante o trajeto, uma vez por ativação. Ela derruba o adversário, que fica protegido durante a queda e depois se levanta. Defesa ou escudo reduzem o dano e evitam essa queda.
+
+**Todo golpe que causa dano solta sangue em pixel art**, incluindo o dano reduzido de um golpe defendido. A voadora produz quatro vezes mais partículas que um golpe comum. As manchas permanecem no ringue durante toda a partida, inclusive após nocautes; só são limpas ao iniciar outra partida ou revanche. O som pode ser ativado no cabeçalho.
 
 ### Itens que caem na arena
 

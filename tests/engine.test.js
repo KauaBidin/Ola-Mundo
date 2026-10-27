@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { CHARACTERS, ITEM_TYPES, ROUND_DURATION, createMatch, stepMatch } from '../public/engine.js';
+import { CHARACTERS, ITEM_TYPES, ROUND_DURATION, SPECIAL_DURATION, SPECIAL_REACH, createMatch, stepMatch } from '../public/engine.js';
 
 const playing = (ids, seed = 12345) => { const match = createMatch(ids, { seed }); match.phase = 'playing'; match.countdown = 0; return match; };
 const advance = (state, inputs, seconds, hz = 60) => {
@@ -114,7 +114,7 @@ test('special launches, protects the fallen player from juggling, then recovers 
   assert.equal(player.downTimer, 0); assert.equal(player.y, 0); assert.notEqual(player.action, 'down');
 });
 
-test('manual defense and shield reduce damage, prevent launch and emit no hit/blood event', () => {
+test('manual defense and shield reduce damage, prevent launch and emit a block event instead of a hit', () => {
   for (const shield of [false, true]) {
     const state = closeFighters(playing());
     if (shield) state.players[1].buffs.shield = 8;
@@ -224,4 +224,84 @@ test('speed, rage and jump pickups materially change movement, damage and jump h
   const baseJump = playing(), highJump = playing(); pickup(highJump, 'jump');
   advance(baseJump, [{ jump: true }, {}], 0.3); advance(highJump, [{ jump: true }, {}], 0.3);
   assert.ok(highJump.players[0].y > baseJump.players[0].y + 40);
+});
+
+test('flying kick visibly advances and jumps before connecting beyond the old special range', () => {
+  const state = playing(); state.players[0].x = 200; state.players[1].x = 550;
+  stepMatch(state, [{ special: true }, {}], 1 / 120);
+  assert.equal(SPECIAL_DURATION, 0.5); assert.equal(SPECIAL_REACH, 250);
+  const source = state.players[0];
+  assert.equal(source.action, 'special'); assert.equal(source.kickTimer, SPECIAL_DURATION);
+  assert.equal(source.kickDirection, 1); assert.equal(source.kickHit, false);
+  assert.ok(source.x > 200 && source.y > 0 && source.vx >= 600 && source.vy > 300);
+  assert.equal(state.players[1].hp, 100, 'cannot connect before reaching the distant rival');
+  advance(state, [{}, {}], 0.2);
+  assert.ok(source.x > 300); assert.ok(state.players[1].hp < 100);
+  assert.equal(source.kickHit, true); assert.ok(state.players[1].downTimer > 0);
+});
+
+test('active flying kick hits an opponent entering reach later, exactly once per activation', () => {
+  const state = playing(); state.players[0].x = 100; state.players[1].x = 850;
+  stepMatch(state, [{ special: true }, {}], 1 / 120);
+  advance(state, [{ special: true }, {}], 0.1);
+  assert.equal(state.players[1].hp, 100);
+  state.players[1].x = state.players[0].x + 150;
+  stepMatch(state, [{ special: true }, {}], 1 / 120);
+  const hit = state.events.find(e => e.type === 'hit');
+  assert.ok(hit && hit.special && hit.knockdown && hit.blood); assert.equal(hit.direction, 1);
+  assert.equal(state.players[0].kickHit, true);
+  Object.assign(state.players[1], { hp: 100, downTimer: 0, invulnerableTimer: 0, action: 'idle', y: 0, vy: 0, vx: 0 });
+  state.players[1].x = state.players[0].x + 100;
+  advance(state, [{ special: true }, {}], 0.25);
+  assert.equal(state.players[1].hp, 100, 'even resetting victim protection cannot cause a second hit');
+  assert.ok(state.players[0].energy > 50 && state.players[0].energy < 55, 'one activation charges only 50');
+});
+
+test('flying kick is directional and works toward rivals on either side', () => {
+  const state = playing(); state.players[0].x = 750; state.players[1].x = 400;
+  stepMatch(state, [{ special: true }, {}], 1 / 120);
+  assert.equal(state.players[0].kickDirection, -1); assert.ok(state.players[0].vx < -600);
+  assert.ok(state.players[0].x < 750 && state.players[0].y > 0);
+  advance(state, [{ right: true }, {}], 0.2);
+  assert.equal(state.players[0].facing, -1, 'kick direction stays locked despite opposite movement input');
+  assert.ok(state.players[1].hp < 100);
+});
+
+test('flying kick cannot hit across the whole arena or repeat before its cooldown', () => {
+  const far = playing(); far.players[0].x = 80; far.players[1].x = 930;
+  stepMatch(far, [{ special: true }, {}], 1 / 120);
+  advance(far, [{ special: true }, {}], 0.7);
+  assert.equal(far.players[1].hp, 100); assert.equal(far.players[0].kickTimer, 0);
+  assert.ok(far.players[0].energy > 55 && far.players[0].energy < 59);
+  assert.ok(far.players[0].specialCooldown > 0.85);
+  const distantX = far.players[0].x;
+  advance(far, [{ special: true }, {}], 0.3);
+  assert.equal(far.players[0].kickTimer, 0); assert.ok(far.players[0].x - distantX < 20);
+});
+
+test('flying kick keeps airborne momentum rather than granting another upward jump', () => {
+  const state = playing(); Object.assign(state.players[0], { y: 170, vy: -100 });
+  stepMatch(state, [{ special: true }, {}], 1 / 120);
+  assert.ok(state.players[0].vy < -100); assert.ok(state.players[0].y < 170);
+  assert.equal(state.players[0].action, 'special');
+});
+
+test('normal hits, knockdowns and KO interrupt a flying kick; simultaneous kicks stay fair', () => {
+  for (const [attackerInput, hp, expected] of [[{ attack: true }, 100, 'hit'], [{ special: true }, 100, 'down'], [{ attack: true }, 1, 'knockout']]) {
+    const state = closeFighters(playing());
+    Object.assign(state.players[0], { action: 'special', kickTimer: 0.4, attackTimer: 0.4, kickDirection: 1, kickHit: true, hp });
+    stepMatch(state, [{}, attackerInput], 1 / 120);
+    assert.equal(state.players[0].action, expected); assert.equal(state.players[0].kickTimer, 0); assert.equal(state.players[0].attackTimer, 0);
+  }
+  const both = closeFighters(playing()); stepMatch(both, [{ special: true }, { special: true }], 1 / 120);
+  assert.ok(both.players.every(p => p.downTimer > 0 && p.hp < 100 && !p.kickTimer));
+});
+
+test('all positive-damage strikes identify blood eligibility, including defense chip', () => {
+  for (const [special, block] of [[false, false], [true, false], [false, true], [true, true]]) {
+    const state = closeFighters(playing()); stepMatch(state, [special ? { special: true } : { attack: true }, block ? { block: true } : {}], 1 / 120);
+    const damage = state.events.find(e => ['hit', 'block'].includes(e.type));
+    assert.ok(damage.damage > 0 && damage.blood); assert.equal(damage.special, special);
+    assert.equal(damage.knockdown, special && !block);
+  }
 });

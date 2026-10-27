@@ -1,3 +1,5 @@
+import { SPECIAL_DURATION } from './engine.js';
+
 // Photo-inspired pixel art, shared by the selection screen and the arena.
 // Crops and individual artwork are reused by SVG/Canvas.
 const SHEETS = {
@@ -14,6 +16,12 @@ for (const sheet of Object.values(SHEETS)) {
   sheet.image = typeof Image === 'undefined' ? null : new Image();
   if (sheet.image) sheet.image.src = sheet.src;
 }
+const kickSheet = typeof Image === 'undefined' ? null : new Image();
+if (kickSheet) kickSheet.src = '/assets/flying-kicks.png';
+const KICK_CROPS = {
+  emerzon:{x:4,y:4}, douglas:{x:772,y:4},
+  jose:{x:4,y:516}, kaua:{x:772,y:516},
+};
 
 // Lightweight animated fallback while the shared image is loading.
 const LOOKS = {
@@ -154,12 +162,18 @@ export function drawFighter(ctx, player, x, ground, scale, time) {
   const knockedOut=player.hp<=0||player.action==='knockout'||player.respawnTimer>0;
   const down=knockedOut||player.action==='down'||player.downTimer>0;
   const attacking=!down&&(player.action==='attack'||player.action==='special');
-  const duration=player.action==='special'?.36:.2;
+  const flying=attacking&&player.action==='special';
+  const kickReady=flying&&kickSheet?.complete&&kickSheet.naturalWidth;
+  const duration=flying?SPECIAL_DURATION:.2;
   const impact=attacking?Math.sin(Math.PI*Math.max(0,Math.min(1,1-player.attackTimer/duration))):0;
   const bob=down?0:walking?-Math.abs(Math.sin(time*13))*1.8:player.action==='idle'?Math.sin(time*3)*.65:0;
   const fallback=ready?null:sprite(player.characterId,player.action,time);
   const body=()=>{
-    if(ready)ctx.drawImage(fighterSheet,crop.x,crop.y,crop.width,crop.height,-width/2,-110,width,110);
+    if(kickReady){
+      const frame=KICK_CROPS[player.characterId]||KICK_CROPS.emerzon;
+      ctx.drawImage(kickSheet,frame.x,frame.y,760,504,-45,-105,151,100);
+    }
+    else if(ready)ctx.drawImage(fighterSheet,crop.x,crop.y,crop.width,crop.height,-width/2,-110,width,110);
     else {
       ctx.save();ctx.translate(-34,-110);
       for(const [rx,ry,w,h,color] of fallback){ctx.fillStyle=color;ctx.fillRect(rx,ry,w,h);}
@@ -169,9 +183,9 @@ export function drawFighter(ctx, player, x, ground, scale, time) {
 
   ctx.save();ctx.translate(x,ground-(player.y||0)*.62);ctx.scale(player.facing*scale,scale);
   // Colored trails and auras stay behind the fighter instead of obscuring the outfit.
-  if(!down && (dashing || (buffs.speed>0 && walking))) {
-    const trails=dashing?3:2;
-    for(let n=trails;n>=1;n--){ctx.save();ctx.translate(-n*(dashing?11:7),bob);ctx.globalAlpha=.13/n;body();ctx.restore();}
+  if(!down && (flying || dashing || (buffs.speed>0 && walking))) {
+    const trails=flying||dashing?3:2;
+    for(let n=trails;n>=1;n--){ctx.save();ctx.translate(-n*(flying?18:dashing?11:7),bob);ctx.globalAlpha=.13/n;body();ctx.restore();}
     ctx.strokeStyle=dashing?accent:'#ffe078';ctx.lineWidth=1.5;ctx.globalAlpha=.7;
     for(let n=0;n<3;n++){ctx.beginPath();ctx.moveTo(-width/2-10-n*3,-35-n*22);ctx.lineTo(-width/2-25-n*7,-35-n*22);ctx.stroke();}
     ctx.globalAlpha=1;
@@ -209,11 +223,12 @@ export function drawFighter(ctx, player, x, ground, scale, time) {
     else if(dashing)ctx.rotate(-.16);
     else if(player.action==='jump')ctx.rotate(-.045);
     else if(walking)ctx.rotate(Math.sin(time*13)*.018);
-    else if(attacking)ctx.rotate(-impact*.055);
+    else if(flying&&!kickReady)ctx.rotate(-.45-impact*.1);
+    else if(attacking&&!flying)ctx.rotate(-impact*.055);
     if(player.invulnerableTimer>0)ctx.globalAlpha*=.7+Math.sin(time*6)*.13;
     if(player.action==='block')ctx.scale(1,.93);
     else if(walking)ctx.scale(1+Math.sin(time*13)*.008,1-Math.abs(Math.sin(time*13))*.008);
-    else ctx.scale(1+impact*.04,1-impact*.025);
+    else if(!flying)ctx.scale(1+impact*.04,1-impact*.025);
   }
   body();ctx.restore();
 
@@ -230,8 +245,9 @@ export function drawFighter(ctx, player, x, ground, scale, time) {
   if(attacking) {
     const special=player.action==='special';
     ctx.strokeStyle=accent;ctx.fillStyle=accent;ctx.globalAlpha=.35+impact*.65;ctx.lineWidth=special?3:2;
-    ctx.beginPath();ctx.ellipse(20+impact*17,-59,special?43:30,special?26:16,0,-1.1,1.05);ctx.stroke();
-    for(let i=0;i<(special?5:3);i++)ctx.fillRect(33+impact*13+i*6,-69+i*5,5+(special?4:0),2);
+    const tip=special?119:20+impact*17;
+    ctx.beginPath();ctx.ellipse(tip,-59,special?22:30,special?30:16,0,-1.1,1.05);ctx.stroke();
+    for(let i=0;i<(special?5:3);i++)ctx.fillRect((special?89:33)+impact*13+i*6,-69+i*5,5+(special?4:0),2);
     ctx.globalAlpha=1;
   }
   ctx.restore();

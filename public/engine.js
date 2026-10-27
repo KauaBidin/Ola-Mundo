@@ -9,6 +9,8 @@ export const CHARACTERS = [
 
 export const ARENA_WIDTH = 1000;
 export const ROUND_DURATION = 150;
+export const SPECIAL_DURATION = 0.5;
+export const SPECIAL_REACH = 250;
 export const ITEM_TYPES = [
   { id: 'heal', label: 'Vida extra', short: '+30 HP', color: '#b6f269', duration: 0, description: 'Recupera 30 de vida.' },
   { id: 'speed', label: 'Turbo', short: 'TURBO', color: '#ffe078', duration: 8, description: 'Movimento 45% mais rápido por 8 segundos.' },
@@ -37,6 +39,7 @@ export function createMatch(ids = ['emerzon', 'douglas'], { seed = Math.floor(Ma
       action: 'idle', attackTimer: 0, attackCooldown: 0, specialCooldown: 0,
       hitTimer: 0, previousJump: false, jumpBuffer: 0, coyoteTimer: 0.09,
       dashTimer: 0, dashCooldown: 0, previousDash: false, dashDirection: index ? -1 : 1,
+      kickTimer: 0, kickDirection: index ? -1 : 1, kickHit: false,
       downTimer: 0, respawnTimer: 0, invulnerableTimer: 0, buffs: emptyBuffs(),
     })),
   };
@@ -60,6 +63,7 @@ function respawn(state, index) {
     action: 'idle', attackTimer: 0, attackCooldown: 0, specialCooldown: 0,
     hitTimer: 0, downTimer: 0, respawnTimer: 0, invulnerableTimer: 1.5,
     dashTimer: 0, dashCooldown: 0, jumpBuffer: 0, coyoteTimer: 0.09,
+    kickTimer: 0, kickHit: false,
     buffs: emptyBuffs(),
   });
   event(state, 'respawn', { player: index, x: player.x, y: 0 });
@@ -81,7 +85,7 @@ function movePlayer(state, index, input, dt, strikes) {
   const player = state.players[index], opponent = state.players[1 - index];
   const character = characterFor(player.characterId);
   const wasDown = player.action === 'down' || player.downTimer > 0;
-  for (const key of ['attackTimer', 'attackCooldown', 'specialCooldown', 'hitTimer', 'dashTimer', 'dashCooldown', 'downTimer', 'invulnerableTimer', 'jumpBuffer']) player[key] = timer(player[key], dt);
+  for (const key of ['attackTimer', 'attackCooldown', 'specialCooldown', 'hitTimer', 'dashTimer', 'dashCooldown', 'kickTimer', 'downTimer', 'invulnerableTimer', 'jumpBuffer']) player[key] = timer(player[key], dt);
   for (const key of Object.keys(player.buffs)) player.buffs[key] = timer(player.buffs[key], dt);
   player.energy = Math.min(100, player.energy + dt * 10);
   const jumpPressed = !!input.jump && !player.previousJump;
@@ -91,14 +95,14 @@ function movePlayer(state, index, input, dt, strikes) {
   if (player.respawnTimer > 0 || player.hp <= 0) {
     player.respawnTimer = timer(player.respawnTimer, dt);
     if (!player.respawnTimer) { respawn(state, index); return; }
-    player.action = 'knockout';
+    player.action = 'knockout'; player.attackTimer = 0; player.kickTimer = 0; player.hitTimer = 0; player.dashTimer = 0;
     player.vx = approach(player.vx, 0, dt * 340);
     moveBody(player, dt);
     return;
   }
   player.facing = player.x <= opponent.x ? 1 : -1;
   if (wasDown) {
-    player.dashTimer = 0; player.jumpBuffer = 0;
+    player.dashTimer = 0; player.kickTimer = 0; player.attackTimer = 0; player.hitTimer = 0; player.jumpBuffer = 0;
     player.vx = approach(player.vx, 0, dt * 400);
     moveBody(player, dt);
     if (!player.downTimer && !player.y) {
@@ -112,9 +116,16 @@ function movePlayer(state, index, input, dt, strikes) {
   player.coyoteTimer = grounded ? 0.09 : timer(player.coyoteTimer, dt);
   if (jumpPressed) player.jumpBuffer = 0.12;
   if (player.hitTimer > 0) {
-    player.action = 'hit'; player.dashTimer = 0;
+    player.action = 'hit'; player.dashTimer = 0; player.kickTimer = 0;
     player.vx = approach(player.vx, 0, dt * 180);
     moveBody(player, dt);
+    return;
+  }
+  if (player.kickTimer > 0) {
+    player.action = 'special'; player.attackTimer = player.kickTimer;
+    player.facing = player.kickDirection; player.vx = player.kickDirection * 620;
+    moveBody(player, dt);
+    if (!player.kickHit) strikes.push({ attacker: index, special: true });
     return;
   }
 
@@ -145,7 +156,10 @@ function movePlayer(state, index, input, dt, strikes) {
     if (!player.attackTimer && !player.dashTimer) {
       if (input.special && !player.specialCooldown && player.energy >= 50) {
         player.energy -= 50; player.specialCooldown = 1.6;
-        player.attackCooldown = 0.65; player.attackTimer = 0.36; player.action = 'special';
+        player.attackCooldown = 0.65; player.attackTimer = SPECIAL_DURATION; player.action = 'special';
+        player.kickTimer = SPECIAL_DURATION; player.kickDirection = player.facing; player.kickHit = false;
+        player.dashTimer = 0; player.vx = player.kickDirection * 620;
+        if (grounded) player.vy = 340;
         strikes.push({ attacker: index, special: true }); event(state, 'special', { player: index });
       } else if (input.attack && !player.attackCooldown) {
         player.attackCooldown = 0.4; player.attackTimer = 0.2; player.action = 'attack';
@@ -211,7 +225,8 @@ function simulate(state, inputs, dt) {
   for (const strike of strikes) {
     const source = state.players[strike.attacker], targetIndex = 1 - strike.attacker, target = state.players[targetIndex];
     if (target.hp <= 0 || target.respawnTimer || target.downTimer || target.action === 'down' || target.invulnerableTimer > 0) continue;
-    if (Math.abs(source.x - target.x) > (strike.special ? 195 : 118) || Math.abs(source.y - target.y) > 105) continue;
+    if (Math.abs(source.x - target.x) > (strike.special ? SPECIAL_REACH : 118) || Math.abs(source.y - target.y) > 105) continue;
+    if (strike.special && (target.x - source.x) * source.kickDirection < -35) continue;
     const blocked = target.action === 'block', shielded = target.buffs.shield > 0;
     const power = characterFor(source.characterId).stats.power, defense = characterFor(target.characterId).stats.defense;
     const baseDamage = (strike.special ? 13 + power * 1.8 : 4 + power * 1.1) * (1 - defense * 0.025);
@@ -219,22 +234,23 @@ function simulate(state, inputs, dt) {
     hits.push({ ...strike, targetIndex, damage, blocked: blocked || shielded, knockdown: strike.special && !blocked && !shielded, direction: source.facing });
   }
   for (const hit of hits) {
+    if (hit.special) state.players[hit.attacker].kickHit = true;
     const target = state.players[hit.targetIndex];
     target.hp = Math.max(0, target.hp - hit.damage);
     if (hit.knockdown) {
       target.downTimer = 1.15; target.action = 'down'; target.vx = hit.direction * 480; target.vy = 460;
-      target.invulnerableTimer = 1.15; target.dashTimer = 0; target.attackTimer = 0;
+      target.invulnerableTimer = 1.15; target.dashTimer = 0; target.kickTimer = 0; target.attackTimer = 0;
     } else if (!hit.blocked) {
       target.hitTimer = 0.14; target.action = 'hit'; target.vx = hit.direction * 150;
-      target.dashTimer = 0; target.attackTimer = 0;
+      target.dashTimer = 0; target.kickTimer = 0; target.attackTimer = 0;
     } else target.vx += hit.direction * 25;
     event(state, hit.blocked ? 'block' : 'hit', {
       player: hit.targetIndex, attacker: hit.attacker, damage: hit.damage, special: hit.special,
-      direction: hit.direction, knockdown: hit.knockdown, x: target.x, y: target.y,
+      direction: hit.direction, knockdown: hit.knockdown, blood: hit.damage > 0, x: target.x, y: target.y,
     });
     if (!target.hp) {
       state.scores[hit.attacker]++;
-      target.action = 'knockout'; target.respawnTimer = 2; target.downTimer = 0; target.hitTimer = 0;
+      target.action = 'knockout'; target.respawnTimer = 2; target.downTimer = 0; target.hitTimer = 0; target.kickTimer = 0;
       event(state, 'ko', { player: hit.targetIndex, attacker: hit.attacker, x: target.x, y: target.y });
     }
   }
