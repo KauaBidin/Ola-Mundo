@@ -1,18 +1,24 @@
 // Photo-inspired pixel art, shared by the selection screen and the arena.
-// Crops leave the original generated sheet intact and are reused by SVG/Canvas.
-const FIGHTER_SHEET = '/assets/fighters-reference.png';
-const SHEET_WIDTH = 1774, SHEET_HEIGHT = 887;
+// Crops and individual artwork are reused by SVG/Canvas.
+const SHEETS = {
+  base: { src:'/assets/fighters-reference.png', width:1774, height:887 },
+  douglas: { src:'/assets/douglas-shirtless.png', width:1136, height:1385 },
+};
 const CROPS = {
-  emerzon: { x:0, width:466 }, douglas: { x:466, width:445 },
+  emerzon: { x:0, width:466 },
+  douglas: { sheet:'douglas', x:0, y:0, width:1136, height:1385 },
   jose: { x:911, width:454 }, kaua: { x:1365, width:409 },
 };
-const fighterSheet = typeof Image === 'undefined' ? null : new Image();
-if (fighterSheet) fighterSheet.src = FIGHTER_SHEET;
+const cropFor = id => ({ sheet:'base', y:24, height:850, ...(CROPS[id]||CROPS.emerzon) });
+for (const sheet of Object.values(SHEETS)) {
+  sheet.image = typeof Image === 'undefined' ? null : new Image();
+  if (sheet.image) sheet.image.src = sheet.src;
+}
 
 // Lightweight animated fallback while the shared image is loading.
 const LOOKS = {
   emerzon: { skin:'#d1a185', shade:'#a8755d', hair:'#302820', top:'#24364d', light:'#344b63', dark:'#19273b', pants:'#292f38', accent:'#b6f269' },
-  douglas: { skin:'#cda080', shade:'#a87660', hair:'#292626', top:'#25364d', light:'#3a4d65', dark:'#172438', pants:'#30323c', accent:'#bc91ff' },
+  douglas: { skin:'#cda080', shade:'#a87660', hair:'#292626', top:'#cda080', light:'#e1b497', dark:'#a87660', pants:'#30323c', accent:'#bc91ff' },
   jose: { skin:'#bc8c70', shade:'#93664e', hair:'#2d2523', top:'#254d43', light:'#38695c', dark:'#19382f', pants:'#2b313d', accent:'#69cfff' },
   kaua: { skin:'#d7ab8d', shade:'#ae7d65', hair:'#272321', top:'#255357', light:'#367075', dark:'#193b40', pants:'#30343d', accent:'#ffb66f' },
 };
@@ -32,10 +38,11 @@ function sprite(id, pose='idle', frame=0) {
   rect(19,42,31,31,c.top);rect(16,47,6,22,c.dark);rect(23,43,5,26,c.light);
   rect(19,68,31,7,c.dark);rect(27,43,17,5,c.light);rect(30,36,13,12,c.skin);rect(30,37,13,5,c.shade);
   if(id==='douglas') {
-    // Navy open jacket over a black crew-neck shirt, without a tie.
-    rect(28,43,15,29,'#141a23');rect(30,42,12,4,c.skin);rect(29,46,14,3,'#0f141c');
-    rect(24,43,5,25,c.light);rect(26,48,4,13,c.top);rect(43,43,5,25,c.light);rect(41,49,4,15,c.top);
-    rect(23,65,6,3,c.dark);rect(43,64,6,3,c.dark);rect(28,69,16,3,'#10151d');
+    // Shirtless, broad chest and round belly, matching the updated artwork.
+    rect(17,43,36,11,c.skin);rect(13,53,44,18,c.skin);rect(17,70,37,7,c.skin);
+    rect(15,55,4,14,c.shade);rect(52,55,5,14,c.shade);rect(20,49,5,15,c.light);
+    rect(25,56,4,2,c.shade);rect(44,56,4,2,c.shade);rect(27,60,19,2,'#b9866b');
+    rect(34,68,3,3,c.shade);rect(23,75,27,2,c.shade);rect(22,78,28,3,c.pants);
   }
   if(id==='emerzon') {
     // Plain navy T-shirt with a round collar.
@@ -106,25 +113,25 @@ function sprite(id, pose='idle', frame=0) {
 
 export function portraitSVG(character, small=false) {
   const {id,color}=character;
-  const crop=CROPS[id]||CROPS.emerzon;
-  const width=crop.width/850*216;
-  const fighter=`<svg x="${146-width/2}" y="8" width="${width}" height="216" viewBox="${crop.x} 24 ${crop.width} 850" overflow="hidden" preserveAspectRatio="none"><image href="${FIGHTER_SHEET}" width="${SHEET_WIDTH}" height="${SHEET_HEIGHT}"/></svg>`;
+  const crop=cropFor(id), sheet=SHEETS[crop.sheet];
+  const width=crop.width/crop.height*216;
+  const fighter=`<svg x="${146-width/2}" y="8" width="${width}" height="216" viewBox="${crop.x} ${crop.y} ${crop.width} ${crop.height}" overflow="hidden" preserveAspectRatio="none"><image href="${sheet.src}" width="${sheet.width}" height="${sheet.height}"/></svg>`;
   const racks=[15,80,180,245].map((x,i)=>`<g opacity="${i%2?.28:.45}"><rect x="${x}" y="25" width="43" height="160" fill="#16141e" stroke="${color}" stroke-opacity=".22"/>${[38,58,78,98,118,138,158].map((y,j)=>`<rect x="${x+5}" y="${y}" width="33" height="14" fill="#292534"/><rect x="${x+8}" y="${y+4}" width="2" height="3" fill="${color}" opacity="${j%3?.45:1}"/><path d="M${x+15} ${y+6}h16" stroke="#ffffff" stroke-opacity=".1"/>`).join('')}</g>`).join('');
   return `<svg class="portrait" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 240" role="img" aria-label="Ilustração pixel art de ${character.name}"><defs><radialGradient id="glow-${id}${small?'s':''}"><stop stop-color="${color}" stop-opacity=".18"/><stop offset="1" stop-color="${color}" stop-opacity="0"/></radialGradient></defs><rect width="280" height="240" fill="#211e29"/><rect width="280" height="240" fill="url(#glow-${id}${small?'s':''})"/>${racks}<path d="M0 195h280M140 195 0 240m140-45 140 45M140 195l-65 45m65-45 65 45M0 215h280M0 237h280" stroke="${color}" stroke-opacity=".12"/><path d="M0 0h90L0 190z" fill="${color}" opacity=".025"/><text x="20" y="187" fill="${color}" opacity=".2" font-family="monospace" font-size="7">${id==='kaua'?'&gt; auto.combo()':id==='jose'?'&gt; weakness.found':id==='douglas'?'&gt; access: admin':'&gt; system.ready'}</text><ellipse cx="146" cy="222" rx="67" ry="9" fill="#08080e" opacity=".7"/><ellipse cx="146" cy="224" rx="64" ry="7" fill="none" stroke="${color}" stroke-opacity=".4"/>${fighter}<path d="M16 211v12h12m224-12v12h-12" fill="none" stroke="${color}" opacity=".35"/></svg>`;
 }
 
 export function drawFighter(ctx, player, x, ground, scale, time) {
   const accent=LOOKS[player.characterId]?.accent||'#fff';
+  const crop=cropFor(player.characterId), fighterSheet=SHEETS[crop.sheet].image;
   ctx.save();ctx.translate(x,ground-player.y*.62);ctx.scale(player.facing*scale,scale);
   if(player.action==='special') {ctx.fillStyle=accent+'35';ctx.fillRect(-35,-105,95,108);}
   if(player.action==='block') {ctx.strokeStyle=accent+'bb';ctx.lineWidth=2;ctx.beginPath();ctx.ellipse(24,-61,21,40,0,-1.4,1.4);ctx.stroke();}
   if(fighterSheet?.complete && fighterSheet.naturalWidth) {
-    const crop=CROPS[player.characterId]||CROPS.emerzon;
     const walking=player.action==='walk', attacking=player.action==='attack'||player.action==='special';
     const duration=player.action==='special'?.36:.2;
     const impact=attacking?Math.sin(Math.PI*Math.max(0,Math.min(1,1-player.attackTimer/duration))):0;
     const bob=walking?-Math.abs(Math.sin(time*13))*2.2:player.action==='idle'?Math.sin(time*3)*.7:0;
-    const width=crop.width/850*110;
+    const width=crop.width/crop.height*110;
     ctx.save();ctx.translate(impact*9,bob);
     if(player.hp<=0)ctx.rotate(-1.12);
     else if(player.action==='hit'){ctx.rotate(.08);ctx.globalAlpha=.72;}
@@ -133,7 +140,7 @@ export function drawFighter(ctx, player, x, ground, scale, time) {
     else if(attacking)ctx.rotate(-impact*.055);
     if(player.action==='block')ctx.scale(1,.93);
     else ctx.scale(1+impact*.04,1-impact*.025);
-    ctx.drawImage(fighterSheet,crop.x,24,crop.width,850,-width/2,-110,width,110);
+    ctx.drawImage(fighterSheet,crop.x,crop.y,crop.width,crop.height,-width/2,-110,width,110);
     ctx.restore();
     if(attacking) {
       const special=player.action==='special';

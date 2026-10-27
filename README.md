@@ -2,7 +2,7 @@
 
 Jogo de luta arcade multiplayer 1x1, em português, com pixel art original e arena de datacenter. Escolha **Emerzon (TI N2)**, **Douglas (Gerente de TI)**, **José (Analista de TI)** ou **Kauã (Aux. Procesos e automatización)**. Cada personagem tem atributos e um golpe especial próprios.
 
-Os visuais dos quatro personagens foram adaptados em pixel art a partir das fotos de referência fornecidas. A seleção e a arena usam a mesma arte, distribuída com o jogo em `public/assets/fighters-reference.png`. A imagem é carregada localmente, sem serviços de geração ou outras chamadas externas durante as partidas.
+Os visuais dos quatro personagens foram adaptados em pixel art a partir das fotos de referência fornecidas. A seleção e a arena usam a mesma arte, distribuída com o jogo em `public/assets/`. Douglas usa uma arte própria sem camisa e com o corpo mais gordo. As imagens são carregadas localmente, sem serviços de geração ou outras chamadas externas durante as partidas.
 
 ## Executar
 
