@@ -14,6 +14,7 @@
   <link rel="preload" as="image" href="/assets/flying-kicks.png">
   <link rel="preload" as="image" href="/assets/punch-frames.png">
   <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/selection.css">
 </head>
 <body>
   <div class="site-shell">
@@ -27,7 +28,9 @@
         <div class="hero-copy"><h1 id="hero-title">O EXPEDIENTE ACABOU.<br>A <span class="outlined-word">LUTA</span> COMEÇOU<span class="purple">.</span></h1></div>
       </section>
       <section class="roster-section" id="roster" aria-labelledby="roster-heading">
-        <div class="character-grid" id="character-grid"></div>
+        <div class="roster-heading"><h2 id="roster-heading">ESCOLHA SEU LUTADOR</h2><label class="fighter-search" for="character-search">BUSCAR <input type="search" id="character-search" placeholder="Nome do lutador" autocomplete="off"></label></div>
+        <div class="roster-carousel"><button class="carousel-arrow previous" id="roster-prev" aria-label="Lutadores anteriores" aria-controls="character-grid">‹</button><div class="character-grid" id="character-grid"></div><p id="roster-empty" class="empty-roster" hidden>Nenhum lutador encontrado. Tente outro nome.</p><button class="carousel-arrow next" id="roster-next" aria-label="Próximos lutadores" aria-controls="character-grid">›</button></div>
+        <p id="roster-status" class="carousel-status" role="status" aria-live="polite"></p>
       </section>
       <section class="match-dock" aria-labelledby="match-heading">
         <div class="dock-copy"><span class="step-number">02</span><div><span class="dock-eyebrow">PERSONAGEM ESCOLHIDO. DESAFIO LANÇADO.</span><h2 id="match-heading">A ARENA ESTÁ TE ESPERANDO<span class="purple">.</span></h2><p>Crie uma sala e mande o código para o seu adversário.</p></div></div>
@@ -45,7 +48,7 @@
   </dialog>
   <dialog id="join-dialog" class="modal"><button class="close-modal" data-close aria-label="Fechar">×</button><span class="modal-kicker">DESAFIO ACEITO</span><h2>ENCONTRE<br>SEU ADVERSÁRIO<span class="purple">.</span></h2><p>Digite o código da sala que seu colega compartilhou.</p><form id="join-form"><label for="room-code">CÓDIGO DA SALA</label><input id="room-code" name="code" placeholder="EX: AP4N3X" maxlength="6" minlength="6" pattern="[A-Za-z0-9]{6}" autocomplete="off" spellcheck="false" required><p class="form-error" id="join-error" role="alert"></p><button class="button primary full" type="submit">ENTRAR NA ARENA <span>↗</span></button></form></dialog>
   <dialog id="lobby-dialog" class="modal lobby-modal"><button class="close-modal" id="leave-lobby" aria-label="Sair da sala">×</button><span class="modal-kicker">SALA CRIADA · PVP ONLINE</span><h2>CHAME SEU<br>PRÓXIMO RIVAL<span class="purple">.</span></h2><p>Compartilhe este código. A luta começa assim que seu adversário entrar.</p><div class="room-code-box"><span id="lobby-code">------</span><button id="copy-code" aria-label="Copiar código da sala">COPIAR <span>⧉</span></button></div><div class="lobby-player" id="lobby-player"></div><div class="waiting"><span class="waiting-spinner"></span> AGUARDANDO ADVERSÁRIO<span class="waiting-dots">...</span></div><button class="text-button" id="cancel-room">Cancelar sala</button></dialog>
-  <dialog id="local-dialog" class="modal local-modal"><button class="close-modal" data-close aria-label="Fechar">×</button><span class="modal-kicker">PVP LOCAL · UM TECLADO, DOIS RIVAIS</span><h2>QUEM VAI<br>ENCARAR VOCÊ<span class="purple">?</span></h2><p>Jogador 1: <strong id="local-player-name">Emerzon</strong>. Escolha o personagem do Jogador 2.</p><div id="opponent-grid" class="opponent-grid"></div><p class="local-keys"><strong>P1</strong> A D · W · F G · S · Shift <span>|</span> <strong>P2</strong> ← → · ↑ · K L · ↓ · Shift</p><button class="button primary full" id="start-local">COMEÇAR O CONFRONTO <span>↗</span></button></dialog>
+  <dialog id="local-dialog" class="modal local-modal"><button class="close-modal" data-close aria-label="Fechar">×</button><span class="modal-kicker">PVP LOCAL · UM TECLADO, DOIS RIVAIS</span><h2>QUEM VAI<br>ENCARAR VOCÊ<span class="purple">?</span></h2><p>Jogador 1: <strong id="local-player-name">Emerzon</strong>. Escolha o personagem do Jogador 2.</p><label class="fighter-search" for="opponent-search">BUSCAR ADVERSÁRIO<input type="search" id="opponent-search" placeholder="Nome do lutador" autocomplete="off"></label><div class="roster-carousel"><button class="carousel-arrow previous" id="opponent-prev" aria-label="Adversários anteriores" aria-controls="opponent-grid">‹</button><div id="opponent-grid" class="opponent-grid"></div><p id="opponent-empty" class="empty-roster" hidden>Nenhum lutador encontrado. Tente outro nome.</p><button class="carousel-arrow next" id="opponent-next" aria-label="Próximos adversários" aria-controls="opponent-grid">›</button></div><p id="opponent-status" class="carousel-status" role="status" aria-live="polite"></p><p class="local-keys"><strong>P1</strong> A D · W · F G · S · Shift <span>|</span> <strong>P2</strong> ← → · ↑ · K L · ↓ · Shift</p><button class="button primary full" id="start-local">COMEÇAR O CONFRONTO <span>↗</span></button></dialog>
   <section id="game-screen" class="game-screen" aria-label="Arena de combate" hidden>
     <div class="game-topbar"><span class="game-logo">APANE<span> / FIGHT CLUB</span></span><span id="game-mode">PVP LOCAL</span><button class="game-exit" id="exit-game">SAIR DA ARENA ×</button></div>
     <div class="game-hud"><div class="fighter-hud"><div class="hud-label"><strong id="p1-name"></strong><span>P1 · <b id="p1-score">0</b> KO</span></div><div class="health-track"><div id="p1-health"></div></div><div class="energy-track"><div id="p1-energy"></div></div><div class="buff-list" id="p1-buffs"></div></div><div class="timer-box"><span>ARENA TURBO</span><strong id="timer">2:30</strong></div><div class="fighter-hud second"><div class="hud-label"><span>P2 · <b id="p2-score">0</b> KO</span><strong id="p2-name"></strong></div><div class="health-track"><div id="p2-health"></div></div><div class="energy-track"><div id="p2-energy"></div></div><div class="buff-list" id="p2-buffs"></div></div></div>
@@ -57,38 +60,6 @@
   <div class="toast" id="toast" role="status" hidden></div>
   <script type="module" src="/app.js"></script>
   <!-- Ajuste de tamanho da interface -->
-  <script type="module">
-// Fit the existing interface without changing game rules or local content edits.
-const screens=[document.querySelector('.site-shell'),document.getElementById('game-screen')].filter(Boolean);
-let scheduled=false;
-function fitScreens(){
-  scheduled=false;
-  const view=window.visualViewport;
-  const width=view?.width||window.innerWidth;
-  const height=view?.height||window.innerHeight;
-  for(const screen of screens){
-    if(screen.hidden)continue;
-    // Layout dimensions stay unscaled, avoiding feedback when fonts, cards,
-    // power-up badges or the window change size.
-    const contentHeight=Math.max(screen.offsetHeight,screen.scrollHeight);
-    const contentWidth=Math.max(screen.offsetWidth,screen.scrollWidth);
-    if(!contentHeight||!contentWidth)continue;
-    const scale=Math.min(1,(height-8)/contentHeight,(width-8)/contentWidth);
-    screen.style.setProperty('--viewport-scale',String(Math.max(.05,scale)));
-    screen.style.setProperty('--viewport-top',`${Math.max(0,(height-contentHeight*scale)/2)}px`);
-  }
-}
-function scheduleFit(){
-  if(!scheduled){scheduled=true;requestAnimationFrame(fitScreens);}
-}
-const resizeObserver=new ResizeObserver(scheduleFit);
-for(const screen of screens)resizeObserver.observe(screen);
-new MutationObserver(scheduleFit).observe(document.getElementById('game-screen'),{attributes:true,attributeFilter:['hidden']});
-window.addEventListener('resize',scheduleFit);
-window.visualViewport?.addEventListener('resize',scheduleFit);
-document.fonts.ready.then(scheduleFit);
-window.addEventListener('load',scheduleFit,{once:true});
-scheduleFit();
-  </script>
+  <script type="module" src="/viewport.js"></script>
 </body>
 </html>

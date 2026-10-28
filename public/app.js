@@ -16,14 +16,38 @@ const canvas=$('arena-canvas'), ctx=canvas.getContext('2d');
 const icons={sound:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M11 5 6 9H3v6h3l5 4V5Z"/><path d="M15 8c3 2 3 6 0 8m3-11c5 4 5 10 0 14"/></svg>',muted:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M11 5 6 9H3v6h3l5 4V5Z"/><path d="m16 9 6 6m0-6-6 6"/></svg>'};
 const classes=['SUPORTE','LIDERANÇA','ESTRATÉGIA','AUTOMAÇÃO'];
 
+const pageSize=()=>window.matchMedia('(max-width:680px)').matches?2:4;
+let rosterPage=0, opponentPage=0;
+const normalizeName=value=>value.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('pt-BR').trim().replace(/\s+/g,' ');
+function rosterSlice(input,page,size){
+  const query=normalizeName(input.value);
+  const matches=CHARACTERS.filter(c=>normalizeName([c.name,...(c.aliases||[])].join(' ')).includes(query));
+  const pages=Math.max(1,Math.ceil(matches.length/size));
+  const current=Math.max(0,Math.min(page,pages-1));
+  return {matches,pages,current,visible:matches.slice(current*size,(current+1)*size)};
+}
+function updatePager(prefix,view,selectedId){
+  $(prefix+'-prev').disabled=view.current===0;
+  $(prefix+'-next').disabled=view.current===view.pages-1;
+  $(prefix+'-status').textContent=(view.matches.length?`${view.matches.length} lutadores · ${view.current+1}/${view.pages}`:'Nenhum lutador encontrado')+` · ${prefix==='roster'?'P1':'P2'}: ${character(selectedId).name}`;
+  $(prefix+'-empty').hidden=!!view.matches.length;
+}
 function renderRoster(){
-  $('character-grid').innerHTML=CHARACTERS.map((c,i)=>`<button class="character-card ${selected===c.id?'selected':''}" data-character="${c.id}" style="--accent:${c.color}" aria-pressed="${selected===c.id}" aria-label="Selecionar ${c.name}, ${c.role}"><div class="card-art">${portraitSVG(c)}<span class="card-index">P.${String(i+1).padStart(2,'0')}</span><span class="character-class">${classes[i]}</span><span class="selected-label">✓ SELECIONADO <span>PLAYER 01</span></span></div><div class="card-info"><div class="card-name-row"><h3>${c.name.toUpperCase()}</h3><span class="card-number">↗</span></div><p class="card-role">${c.role}</p><p class="card-description">${c.description}</p><div class="stats">${[['FORÇA','power'],['VELOC.','speed'],['DEFESA','defense']].map(([label,key])=>`<div class="stat"><span>${label}</span><div class="stat-bars" aria-label="${label}: ${c.stats[key]} de 5">${Array.from({length:5},(_,n)=>`<i class="${n<c.stats[key]?'filled':''}"></i>`).join('')}</div></div>`).join('')}</div><div class="card-special"><span class="special-symbol">ϟ</span><span>${c.special.toUpperCase()}</span></div></div></button>`).join('');
+  const view=rosterSlice($('character-search'),rosterPage,pageSize());
+  rosterPage=view.current;
+  updatePager('roster',view,selected);
+  $('character-grid').innerHTML=view.visible.map((c)=>`<button class="character-card ${selected===c.id?'selected':''}" data-character="${c.id}" style="--accent:${c.color}" aria-pressed="${selected===c.id}" aria-label="Selecionar ${c.name}, ${c.role}"><div class="card-art">${portraitSVG(c)}<span class="card-index">P.${String(CHARACTERS.indexOf(c)+1).padStart(2,'0')}</span><span class="character-class">${c.className||classes[CHARACTERS.indexOf(c)]||'CONVIDADO'}</span><span class="selected-label">✓ SELECIONADO <span>PLAYER 01</span></span></div><div class="card-info"><div class="card-name-row"><h3>${c.name.toUpperCase()}</h3><span class="card-number">↗</span></div><p class="card-role">${c.role}</p><p class="card-description">${c.description}</p><div class="stats">${[['FORÇA','power'],['VELOC.','speed'],['DEFESA','defense']].map(([label,key])=>`<div class="stat"><span>${label}</span><div class="stat-bars" aria-label="${label}: ${c.stats[key]} de 5">${Array.from({length:5},(_,n)=>`<i class="${n<c.stats[key]?'filled':''}"></i>`).join('')}</div></div>`).join('')}</div><div class="card-special"><span class="special-symbol">ϟ</span><span>${c.special.toUpperCase()}</span></div></div></button>`).join('');
   document.querySelectorAll('[data-character]').forEach(button=>button.addEventListener('click',()=>{
     selected=button.dataset.character;
+    updatePager('roster',rosterSlice($('character-search'),rosterPage,pageSize()),selected);
     document.querySelectorAll('[data-character]').forEach(b=>{b.classList.toggle('selected',b===button);b.setAttribute('aria-pressed',b===button?'true':'false');});
     beep('select');
   }));
 }
+$('character-search').addEventListener('input',()=>{rosterPage=0;renderRoster();});
+$('roster-prev').addEventListener('click',()=>{rosterPage--;renderRoster();});
+$('roster-next').addEventListener('click',()=>{rosterPage++;renderRoster();});
+window.matchMedia('(max-width:680px)').addEventListener('change',()=>{rosterPage=0;renderRoster();});
 function toast(message){clearTimeout(toastTimer);$('toast').textContent=message;$('toast').hidden=false;toastTimer=setTimeout(()=>$('toast').hidden=true,4500);}
 function closeDialogs(){document.querySelectorAll('dialog[open]').forEach(d=>d.close());}
 function showDialog(id){closeDialogs();$(id).showModal();}
@@ -114,9 +138,15 @@ $('room-code').addEventListener('input',e=>{e.target.value=e.target.value.toUppe
 // Both local players use the same game rules as the authoritative online server.
 function renderOpponents(){
   $('local-player-name').textContent=character(selected).name;
-  $('opponent-grid').innerHTML=CHARACTERS.map(c=>`<button class="opponent-choice ${opponent===c.id?'selected':''}" data-opponent="${c.id}" aria-pressed="${opponent===c.id}" aria-label="Jogador 2: ${c.name}">${portraitSVG(c,true)}<span>${c.name}</span></button>`).join('');
-  document.querySelectorAll('[data-opponent]').forEach(button=>button.addEventListener('click',()=>{opponent=button.dataset.opponent;renderOpponents();beep('select');}));
+  const view=rosterSlice($('opponent-search'),opponentPage,4);
+  opponentPage=view.current;
+  updatePager('opponent',view,opponent);
+  $('opponent-grid').innerHTML=view.visible.map(c=>`<button class="opponent-choice ${opponent===c.id?'selected':''}" data-opponent="${c.id}" aria-pressed="${opponent===c.id}" aria-label="Jogador 2: ${c.name}">${portraitSVG(c,true)}<span>${c.name}</span></button>`).join('');
+  document.querySelectorAll('[data-opponent]').forEach(button=>button.addEventListener('click',()=>{opponent=button.dataset.opponent;document.querySelectorAll('[data-opponent]').forEach(b=>{b.classList.toggle('selected',b===button);b.setAttribute('aria-pressed',String(b===button));});updatePager('opponent',rosterSlice($('opponent-search'),opponentPage,4),opponent);beep('select');}));
 }
+$('opponent-search').addEventListener('input',()=>{opponentPage=0;renderOpponents();});
+$('opponent-prev').addEventListener('click',()=>{opponentPage--;renderOpponents();});
+$('opponent-next').addEventListener('click',()=>{opponentPage++;renderOpponents();});
 $('local-button').addEventListener('click',()=>{renderOpponents();showDialog('local-dialog');});
 $('start-local').addEventListener('click',()=>startGame('local',createMatch([selected,opponent])));
 
@@ -127,7 +157,7 @@ function resetRoundEffects(newState){
 }
 function startGame(newMode,newState){
   closeDialogs();clearInputs();state=newState;mode=newMode;resetRoundEffects(newState);
-  $('game-screen').hidden=false;document.body.style.overflow='hidden';$('game-result').hidden=true;
+  $('game-screen').hidden=false;document.querySelector('.site-shell').inert=true;document.body.style.overflow='hidden';$('game-result').hidden=true;
   $('rematch-button').disabled=false;$('rematch-button').innerHTML='REVANCHE <span>↻</span>';
   $('game-mode').textContent=mode==='local'?'PVP LOCAL · 1 × 1':`PVP ONLINE · SALA ${room.code}`;
   $('you-tag').textContent=mode==='online'?` / VOCÊ É P${room.playerIndex+1}`:'';
@@ -137,7 +167,7 @@ function startGame(newMode,newState){
   if(!running){running=true;lastFrame=performance.now();animationFrame=requestAnimationFrame(frame);}
   $('exit-game').focus({preventScroll:true});
 }
-function stopGame(){cancelAnimationFrame(animationFrame);animationFrame=0;running=false;mode=null;state=null;clearInputs();$('arena-event').hidden=true;eventQueue.length=0;$('game-screen').hidden=true;document.body.style.overflow='';$('game-result').hidden=true;$('game-announcement').textContent='';}
+function stopGame(){cancelAnimationFrame(animationFrame);animationFrame=0;running=false;mode=null;state=null;clearInputs();$('arena-event').hidden=true;eventQueue.length=0;$('game-screen').hidden=true;document.querySelector('.site-shell').inert=false;document.body.style.overflow='';$('game-result').hidden=true;$('game-announcement').textContent='';}
 function exitGame(){if(mode==='online')leaveRoom();stopGame();$('local-button').focus({preventScroll:true});}
 $('exit-game').addEventListener('click',exitGame);$('back-selection').addEventListener('click',exitGame);
 $('rematch-button').addEventListener('click',()=>{if(mode==='local')startGame('local',createMatch(state.players.map(p=>p.characterId)));else{send({type:'rematch'});$('rematch-button').disabled=true;$('rematch-button').textContent='AGUARDANDO ADVERSÁRIO...';}});

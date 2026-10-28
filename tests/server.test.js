@@ -139,3 +139,27 @@ test('online round clock never advances faster than real elapsed time', async t 
   await guest.wait('state', message => message.state.phase === 'finished');
   assert.ok(performance.now() - started >= 999, 'one simulated second must take at least one real second (1 ms clock tolerance)');
 });
+
+test('guest fighters retain their choices through online matchmaking and rematch', async t => {
+  const app = createGameServer({ port: 0, host: '127.0.0.1' }); t.after(() => app.close());
+  const { port } = await app.ready;
+  const host = await client(`ws://127.0.0.1:${port}/ws`);
+  const guest = await client(`ws://127.0.0.1:${port}/ws`);
+  t.after(() => { host.socket.terminate(); guest.socket.terminate(); });
+  host.send({ type: 'create', characterId: 'lula' });
+  const lobby = await host.wait('room');
+  assert.equal(lobby.players[0].characterId, 'lula');
+  guest.send({ type: 'join', code: lobby.code, characterId: 'tun-tum-sarhur' });
+  const first = (await guest.wait('state')).state;
+  assert.deepEqual(first.players.map(p => p.characterId), ['lula', 'tun-tum-sarhur']);
+  const room = app.rooms.get(lobby.code);
+  room.state.phase = 'playing'; room.state.countdown = 0; room.state.timeLeft = 0.01;
+  await guest.wait('state', message => message.state.phase === 'finished');
+  host.send({ type: 'rematch' });
+  await host.wait('room', message => message.players[0].rematch);
+  host.discard('state');
+  guest.send({ type: 'rematch' });
+  const rematch = (await host.wait('state', message => message.state.phase === 'countdown' && message.state.timeLeft === 150)).state;
+  assert.deepEqual(rematch.players.map(p => p.characterId), ['lula', 'tun-tum-sarhur']);
+  assert.deepEqual(rematch.scores, [0, 0]);
+});

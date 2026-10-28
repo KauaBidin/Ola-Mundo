@@ -86,3 +86,11 @@ Não são necessárias credenciais, serviços externos ou variáveis obrigatóri
 A fonte Barlow Condensed é distribuída localmente sob SIL Open Font License, em `public/fonts/OFL-Barlow.txt`.
 
 Repositório originalmente criado para o curso de Git e GitHub do Gustavo Guanabara.
+
+## Elenco ampliado e seleção com busca
+
+Além dos quatro personagens originais, o jogo inclui **Lula, Bolsonaro, Nikolas Ferreira, Dilma, Flávio Bolsonaro, Kid Bengala e Tun Tum Sarhur**. Cada convidado tem visual próprio em pixel art, compartilhado entre retrato e arena, sem depender de imagens externas durante a partida.
+
+Use a busca e as setas laterais para escolher entre os 11 lutadores. A busca aceita nomes sem acentos e aliases como **Jair Bolsonaro** e **Tung Tung Sahur**. O modo local oferece a mesma busca e navegação para o Jogador 2. A escolha permanece ao mudar de página ou limpar a busca.
+
+A partida preenche a janela disponível sem rolagem e mantém a proporção do desenho. Veja `ATUALIZACAO.md` para os detalhes do pacote completo; o antigo `ajuste-tela.zip` é mantido apenas por histórico.

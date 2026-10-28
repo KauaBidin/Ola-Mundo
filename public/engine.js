@@ -5,6 +5,13 @@ export const CHARACTERS = [
   { id: 'douglas', name: 'Douglas', role: 'Gerente de TI', color: '#bc91ff', special: 'Escalação máxima', description: 'A última palavra agora é um golpe.', stats: { power: 5, speed: 2, defense: 5 } },
   { id: 'jose', name: 'José', role: 'Analista de TI', color: '#69cfff', special: 'Bug fatal', description: 'Analisa a defesa. Encontra a brecha.', stats: { power: 3, speed: 4, defense: 3 } },
   { id: 'kaua', name: 'Kauã', role: 'Aux. Procesos e automatización', color: '#ffb66f', special: 'Loop infinito', description: 'Automatiza os processos e os combos.', stats: { power: 3, speed: 5, defense: 2 } },
+  { id: 'lula', name: 'Lula', role: 'Convidado da arena', color: '#ff777d', special: 'Redemoinho rubro', description: 'Barba branca, guarda firme e um giro poderoso.', stats: { power: 4, speed: 3, defense: 4 }, aliases: ['Luiz Inácio Lula da Silva'], className: 'VETERANO' },
+  { id: 'bolsonaro', name: 'Bolsonaro', role: 'Convidado da arena', color: '#7de0a2', special: 'Arrancada verde', description: 'Avança pela arena em uma investida veloz.', stats: { power: 4, speed: 4, defense: 3 }, aliases: ['Jair Bolsonaro'], className: 'INVESTIDA' },
+  { id: 'nikolas', name: 'Nikolas Ferreira', role: 'Convidado da arena', color: '#79baff', special: 'Salto relâmpago', description: 'Guarda leve, passos rápidos e ataque aéreo.', stats: { power: 2, speed: 5, defense: 3 }, aliases: ['Nikolas'], className: 'VELOCISTA' },
+  { id: 'dilma', name: 'Dilma', role: 'Convidada da arena', color: '#ff8ebf', special: 'Impacto rubi', description: 'Jaqueta vermelha e golpes de presença.', stats: { power: 4, speed: 3, defense: 4 }, aliases: ['Dilma Rousseff'], className: 'RESISTÊNCIA' },
+  { id: 'flavio', name: 'Flávio Bolsonaro', role: 'Convidado da arena', color: '#79e3da', special: 'Investida cobalto', description: 'Mantém a postura e responde no contra-ataque.', stats: { power: 3, speed: 4, defense: 4 }, aliases: ['Flavio Bolsonaro', 'Flávio'], className: 'EQUILÍBRIO' },
+  { id: 'kid-bengala', name: 'Kid Bengala', role: 'Convidado da arena', color: '#ddadff', special: 'Impacto titã', description: 'Porte imponente e força de peso-pesado.', stats: { power: 5, speed: 2, defense: 4 }, aliases: ['Kid'], className: 'PESO-PESADO' },
+  { id: 'tun-tum-sarhur', name: 'Tun Tum Sarhur', role: 'Meme de madeira', color: '#efca85', special: 'Batida de madeira', description: 'Olhos atentos e um ritmo que sacode a arena.', stats: { power: 5, speed: 3, defense: 2 }, aliases: ['Tung Tung Sahur', 'Tun Tun Sahur', 'Tung Tung', 'Tun Tum'], className: 'BRUTAMONTES' },
 ];
 
 export const ARENA_WIDTH = 1000;

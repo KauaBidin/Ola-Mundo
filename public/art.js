@@ -46,8 +46,147 @@ function getWoundContext() {
   return woundContext;
 }
 
+// Original guest pixel art, shared by SVG portraits and animated Canvas poses.
+// Keeping the rectangles embedded makes every new fighter available offline.
+const GUEST_LOOKS = {
+  lula:{skin:'#dcb391',shade:'#ad7f64',hair:'#e5e2d9',top:'#263448',light:'#41536b',dark:'#172233',pants:'#243043',accent:'#ff777d',tie:'#dd4756'},
+  bolsonaro:{skin:'#d2a184',shade:'#a87b60',hair:'#4b443d',top:'#30483a',light:'#4c6750',dark:'#203328',pants:'#26372d',accent:'#7de0a2',tie:'#5b90ce'},
+  nikolas:{skin:'#e4baa1',shade:'#b88a75',hair:'#24232b',top:'#24283d',light:'#3e465f',dark:'#151b2d',pants:'#222938',accent:'#79baff',tie:'#709acd'},
+  dilma:{skin:'#dbab91',shade:'#ac7865',hair:'#563a30',top:'#be354c',light:'#e95668',dark:'#842538',pants:'#30303e',accent:'#ff8ebf',tie:'#f3d6cd'},
+  flavio:{skin:'#d6a784',shade:'#ab7d61',hair:'#473a32',top:'#253e55',light:'#3c5b76',dark:'#162b3e',pants:'#233448',accent:'#79e3da',tie:'#49a78f'},
+  'kid-bengala':{skin:'#80553d',shade:'#573827',hair:'#29201c',top:'#754b97',light:'#9b6cbc',dark:'#4d306c',pants:'#252532',accent:'#ddadff',tie:'#d8b5ed'},
+  'tun-tum-sarhur':{skin:'#ae773e',shade:'#754b27',hair:'#68431f',top:'#b78145',light:'#d4a565',dark:'#704722',pants:'#90602e',accent:'#efca85',tie:'#e0bd7c'},
+};
+
+function guestSprite(id, pose='idle', frame=0, extension=1) {
+  const c=GUEST_LOOKS[id], r=[];
+  const rect=(x,y,w,h,color)=>r.push([x,y,w,h,color]);
+  const wood=id==='tun-tum-sarhur', kid=id==='kid-bengala';
+  const walking=pose==='walk', flying=pose==='special', blocking=pose==='block';
+  const punching=pose==='attack', jump=pose==='jump';
+  const stride=walking?Math.round(Math.sin(frame*12)*5):jump?4:0;
+  const limb=wood?c.shade:c.skin, edge=wood?'#4e301b':'#171b27';
+  // A forward boot and folded rear knee make the special a distinct pose.
+  if(flying) {
+    rect(22,76,14,17,c.pants);rect(14,88,17,12,c.pants);
+    rect(8,96,21,9,edge);rect(31,74,23,13,c.pants);
+    rect(48,71,34,12,c.pants);rect(78,69,16,14,edge);
+    rect(81,70,11,3,'#59606d');rect(44,74,6,3,c.light);
+  } else {
+    rect(20-stride,76,12,29,wood?c.pants:c.dark);rect(38+stride,76,12,29,c.pants);
+    rect(23-stride,79,3,23,wood?c.light:'#ffffff12');rect(40+stride,79,3,23,'#ffffff0b');
+    rect(14-stride,102,20,7,edge);rect(36+stride,102,21,7,edge);
+    rect(16-stride,106,17,3,'#59606d');rect(38+stride,106,18,3,'#59606d');
+  }
+  if(wood) {
+    // Wooden cylinder, vertical grain, oversized eyes and bare wooden limbs.
+    rect(21,10,29,71,c.dark);rect(18,15,34,61,c.top);
+    rect(22,9,26,5,c.light);rect(23,13,24,3,c.skin);
+    rect(21,19,4,48,c.light);rect(47,18,4,51,c.shade);
+    for(const [x,y,h] of [[28,16,12],[41,14,9],[27,47,18],[37,54,21],[44,42,13],[31,68,10]]) {
+      rect(x,y,2,h,c.shade);rect(x+2,y+3,1,Math.max(2,h-6),c.light);
+    }
+    rect(23,29,12,16,'#3c2d20');rect(38,29,12,16,'#3c2d20');
+    rect(24,28,10,15,'#f6e8cc');rect(39,28,10,15,'#f6e8cc');
+    rect(29,31,4,10,'#22211d');rect(44,31,4,10,'#22211d');
+    rect(29,31,2,3,'#ffffff');rect(44,31,2,3,'#ffffff');
+    rect(34,42,5,6,c.shade);rect(29,51,15,3,'#4e301b');
+    rect(32,54,9,2,'#e1b679');rect(20,74,31,5,c.shade);
+  } else {
+    const broad=kid?5:0;
+    rect(19-broad,43,32+broad*2,32,c.top);
+    rect(19-broad,46,5,23,c.dark);rect(25-broad,45,4,24,c.light);
+    rect(20-broad,73,31+broad*2,7,c.dark);
+    rect(30,36,13,12,c.skin);rect(30,38,13,5,c.shade);
+    if(kid) {
+      rect(13,43,11,26,c.skin);rect(48,43,10,26,c.skin);
+      rect(26,43,18,8,c.skin);rect(23,45,4,27,c.light);
+      rect(34,58,6,9,'#dbc4ed');rect(36,55,2,15,'#dbc4ed');rect(25,74,23,3,'#c7a0e1');
+    } else if(id==='dilma') {
+      rect(29,45,15,22,'#edd5c8');rect(23,45,8,26,c.top);
+      rect(42,45,8,26,c.top);rect(28,44,4,10,c.light);
+      rect(42,44,3,12,c.light);rect(28,48,17,2,'#f4e9d2');
+      for(const y of [57,63,69])rect(39,y,2,2,'#f4c7a3');
+    } else {
+      rect(29,44,14,24,'#e9e4db');rect(33,45,6,5,c.tie);
+      rect(34,49,5,16,c.tie);rect(35,65,3,3,c.tie);
+      rect(26,44,5,20,c.light);rect(42,44,5,20,c.dark);
+      rect(24,52,4,14,c.dark);rect(45,53,3,13,c.light);
+      rect(43,55,5,2,'#dfe6e1');rect(31,73,7,3,'#979a9b');
+    }
+    rect(22,14,28,22,c.skin);rect(25,33,22,7,c.skin);
+    rect(19,23,5,9,c.shade);rect(20,24,4,6,c.skin);
+    rect(48,23,5,8,c.shade);rect(26,16,4,16,'#ffffff15');
+    rect(45,19,4,16,c.shade);rect(33,29,7,3,c.shade);
+    rect(30,24,4,3,'#29262a');rect(43,24,4,3,'#29262a');
+    rect(30,22,5,2,c.hair);rect(42,22,5,2,c.hair);rect(34,35,9,2,'#774c44');
+    if(id==='lula') {
+      rect(22,10,7,13,c.hair);rect(44,10,7,13,c.hair);
+      rect(26,7,20,6,'#cecbc3');rect(28,9,15,4,'#eeeae0');
+      rect(24,29,5,9,c.hair);rect(45,29,5,9,c.hair);
+      rect(27,34,20,9,c.hair);rect(31,41,12,4,c.hair);
+      rect(31,32,13,3,'#f5eee2');rect(34,35,8,2,'#9f8a78');
+      rect(28,38,3,3,'#c1b9aa');rect(42,38,3,3,'#c1b9aa');
+    } else if(id==='bolsonaro') {
+      rect(21,10,29,9,c.hair);rect(21,16,6,10,c.hair);
+      rect(25,7,21,6,c.hair);rect(26,10,18,3,'#736859');
+      rect(43,16,7,5,c.hair);rect(24,31,6,2,c.shade);
+      rect(32,20,5,2,c.shade);rect(40,19,7,2,c.shade);rect(30,36,13,2,'#8f6654');
+    } else if(id==='nikolas') {
+      rect(20,8,31,10,c.hair);rect(21,15,6,10,c.hair);
+      rect(25,4,21,6,c.hair);rect(31,5,15,4,'#393743');
+      rect(24,14,10,7,c.hair);rect(33,13,8,6,c.hair);
+      rect(43,13,7,8,c.hair);rect(26,36,5,2,c.shade);rect(35,35,8,1,'#9d6d60');
+    } else if(id==='dilma') {
+      rect(20,10,32,10,c.hair);rect(19,16,7,20,c.hair);
+      rect(47,15,7,21,c.hair);rect(24,5,22,7,c.hair);
+      rect(26,8,22,4,'#7b5140');rect(22,13,16,6,c.hair);
+      rect(36,12,11,4,'#805542');rect(21,30,5,9,c.hair);
+      rect(48,30,4,8,c.hair);rect(33,35,11,3,'#a54852');
+      rect(29,29,5,2,'#e1a08e');rect(43,29,5,2,'#d99987');
+      rect(21,33,2,3,'#f8d39b');rect(50,33,2,3,'#f8d39b');
+    } else if(id==='flavio') {
+      rect(21,10,30,8,c.hair);rect(23,7,25,7,c.hair);
+      rect(21,16,6,10,c.hair);rect(45,16,6,9,c.hair);
+      rect(30,9,17,3,'#67513f');rect(29,21,7,2,c.hair);
+      rect(41,21,7,2,c.hair);rect(27,31,3,5,c.shade);
+      rect(44,32,3,5,c.shade);rect(30,37,14,2,c.shade);
+    } else if(kid) {
+      rect(25,9,21,5,c.skin);rect(22,13,28,8,c.skin);
+      rect(27,12,13,2,'#b2825a');rect(45,15,5,8,c.shade);
+      rect(29,32,17,3,c.hair);rect(32,35,4,2,c.hair);
+      rect(42,34,4,3,c.hair);rect(28,21,8,2,c.hair);
+      rect(40,21,8,2,c.hair);rect(25,35,5,3,c.shade);
+    }
+  }
+  // Rear hand holds a guard while the forward arm animates independently.
+  rect(11,46,10,19,wood?c.shade:kid?c.skin:c.top);
+  rect(7,56,11,11,limb);rect(6,47,12,12,limb);
+  rect(6,47,12,3,c.shade);rect(8,49,7,2,'#ffffff12');
+  if(punching) {
+    const reach=extension*28;
+    rect(47,46,12+extension*7,11,wood?c.shade:kid?c.skin:c.top);
+    rect(53,47,9+extension*18,9,limb);
+    rect(54+reach,39+extension*4,15,15,limb);rect(54+reach,50+extension*4,15,4,c.shade);
+  } else if(blocking) {
+    rect(47,44,11,18,wood?c.shade:kid?c.skin:c.top);
+    rect(50,29,9,22,limb);rect(46,25,15,13,limb);rect(46,25,15,3,c.shade);
+  } else {
+    rect(47,47,11,18,wood?c.shade:kid?c.skin:c.top);
+    rect(51,47,11,16,limb);rect(49,37,14,13,limb);rect(49,37,14,3,c.shade);
+  }
+  if(wood) {
+    // Cosmetic wooden club; combat remains governed by the shared engine.
+    rect(6,31,5,24,'#68401e');rect(3,18,11,22,'#ba864b');
+    rect(4,18,3,19,'#e0b775');rect(3,38,11,3,'#8c592c');
+  }
+  if(pose==='hit')rect(25,20,25,16,'#ff8c8c22');
+  return r;
+}
+
 // Lightweight animated fallback while the shared image is loading.
 const LOOKS = {
+  ...GUEST_LOOKS,
   emerzon: { skin:'#d1a185', shade:'#a8755d', hair:'#302820', top:'#e9e9e3', light:'#ffffff', dark:'#26282d', pants:'#292f38', accent:'#b6f269' },
   douglas: { skin:'#cda080', shade:'#a87660', hair:'#292626', top:'#cda080', light:'#e1b497', dark:'#a87660', pants:'#30323c', accent:'#bc91ff' },
   jose: { skin:'#bc8c70', shade:'#93664e', hair:'#2d2523', top:'#254d43', light:'#38695c', dark:'#19382f', pants:'#2b313d', accent:'#69cfff' },
@@ -55,6 +194,7 @@ const LOOKS = {
 };
 
 function sprite(id, pose='idle', frame=0, extension=1) {
+  if(GUEST_LOOKS[id])return guestSprite(id,pose,frame,extension);
   const c=LOOKS[id]||LOOKS.emerzon, r=[];
   const rect=(x,y,w,h,color)=>r.push([x,y,w,h,color]);
   const walking=pose==='walk', airborne=pose==='jump', hit=pose==='hit';
@@ -172,18 +312,20 @@ function sprite(id, pose='idle', frame=0, extension=1) {
 
 export function portraitSVG(character, small=false) {
   const {id,color}=character;
-  const crop=cropFor(id), sheet=SHEETS[crop.sheet];
+  const crop=cropFor(id), sheet=SHEETS[id]||SHEETS[crop.sheet];
   const width=crop.width/crop.height*216;
-  const fighter=`<svg x="${146-width/2}" y="8" width="${width}" height="216" viewBox="${crop.x} ${crop.y} ${crop.width} ${crop.height}" overflow="hidden" preserveAspectRatio="none"><image href="${sheet.src}" width="${sheet.width}" height="${sheet.height}"/></svg>`;
+  const fighter=GUEST_LOOKS[id]
+    ? `<g transform="translate(78 6) scale(2)" shape-rendering="crispEdges">${guestSprite(id).map(([x,y,w,h,fill])=>`<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${fill}"/>`).join('')}</g>`
+    : `<svg x="${146-width/2}" y="8" width="${width}" height="216" viewBox="${crop.x} ${crop.y} ${crop.width} ${crop.height}" overflow="hidden" preserveAspectRatio="none"><image href="${sheet.src}" width="${sheet.width}" height="${sheet.height}"/></svg>`;
   const racks=[15,80,180,245].map((x,i)=>`<g opacity="${i%2?.28:.45}"><rect x="${x}" y="25" width="43" height="160" fill="#16141e" stroke="${color}" stroke-opacity=".22"/>${[38,58,78,98,118,138,158].map((y,j)=>`<rect x="${x+5}" y="${y}" width="33" height="14" fill="#292534"/><rect x="${x+8}" y="${y+4}" width="2" height="3" fill="${color}" opacity="${j%3?.45:1}"/><path d="M${x+15} ${y+6}h16" stroke="#ffffff" stroke-opacity=".1"/>`).join('')}</g>`).join('');
   return `<svg class="portrait" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 240" role="img" aria-label="Ilustração pixel art de ${character.name}"><defs><radialGradient id="glow-${id}${small?'s':''}"><stop stop-color="${color}" stop-opacity=".18"/><stop offset="1" stop-color="${color}" stop-opacity="0"/></radialGradient></defs><rect width="280" height="240" fill="#211e29"/><rect width="280" height="240" fill="url(#glow-${id}${small?'s':''})"/>${racks}<path d="M0 195h280M140 195 0 240m140-45 140 45M140 195l-65 45m65-45 65 45M0 215h280M0 237h280" stroke="${color}" stroke-opacity=".12"/><path d="M0 0h90L0 190z" fill="${color}" opacity=".025"/><text x="20" y="187" fill="${color}" opacity=".2" font-family="monospace" font-size="7">${id==='kaua'?'&gt; auto.combo()':id==='jose'?'&gt; weakness.found':id==='douglas'?'&gt; access: admin':'&gt; system.ready'}</text><ellipse cx="146" cy="222" rx="67" ry="9" fill="#08080e" opacity=".7"/><ellipse cx="146" cy="224" rx="64" ry="7" fill="none" stroke="${color}" stroke-opacity=".4"/>${fighter}<path d="M16 211v12h12m224-12v12h-12" fill="none" stroke="${color}" opacity=".35"/></svg>`;
 }
 
 export function drawFighter(ctx, player, x, ground, scale, time) {
   const accent=LOOKS[player.characterId]?.accent||'#fff';
-  const crop=cropFor(player.characterId), fighterSheet=SHEETS[crop.sheet].image;
+  const crop=cropFor(player.characterId), fighterSheet=SHEETS[player.characterId]?.image;
   const ready=!!(fighterSheet?.complete && fighterSheet.naturalWidth);
-  const punchReady=!!(punchSheet?.complete && punchSheet.naturalWidth);
+  const punchReady=!!(Object.hasOwn(PUNCH_ROWS,player.characterId) && punchSheet?.complete && punchSheet.naturalWidth);
   const width=punchReady?94:ready?crop.width/crop.height*110:66;
   const buffs=player.buffs||{};
   const walking=player.action==='walk', dashing=player.action==='dash'||player.dashTimer>0;
@@ -191,7 +333,7 @@ export function drawFighter(ctx, player, x, ground, scale, time) {
   const down=knockedOut||player.action==='down'||player.downTimer>0;
   const attacking=!down&&(player.action==='attack'||player.action==='special');
   const flying=attacking&&player.action==='special';
-  const kickReady=flying&&kickSheet?.complete&&kickSheet.naturalWidth;
+  const kickReady=flying&&Object.hasOwn(KICK_CROPS,player.characterId)&&kickSheet?.complete&&kickSheet.naturalWidth;
   const duration=flying?SPECIAL_DURATION:PUNCH_DURATION;
   const progress=attacking?Math.max(0,Math.min(1,1-player.attackTimer/duration)):0;
   const punchFrame=attacking&&!flying?getPunchFrame(progress):0;

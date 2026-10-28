@@ -18,11 +18,28 @@ const pickup = (state, type, index = 0) => {
   stepMatch(state, [{}, {}], 1 / 120);
 };
 
-test('four characters, six useful drops and a 150 second clock are available', () => {
-  assert.deepEqual(CHARACTERS.map(c => c.id), ['emerzon', 'douglas', 'jose', 'kaua']);
+test('eleven characters, six useful drops and a 150 second clock are available', () => {
+  assert.deepEqual(CHARACTERS.map(c => c.id), ['emerzon', 'douglas', 'jose', 'kaua', 'lula', 'bolsonaro', 'nikolas', 'dilma', 'flavio', 'kid-bengala', 'tun-tum-sarhur']);
   assert.equal(createMatch(['invalid']).players[0].characterId, 'emerzon');
   assert.equal(ROUND_DURATION, 150);
   assert.deepEqual(ITEM_TYPES.map(item => item.id).sort(), ['energy', 'heal', 'jump', 'rage', 'shield', 'speed']);
+});
+
+test('every guest can move, punch and launch a damaging special', () => {
+  for (const id of ['lula', 'bolsonaro', 'nikolas', 'dilma', 'flavio', 'kid-bengala', 'tun-tum-sarhur']) {
+    const movement = playing([id, 'emerzon']);
+    assert.equal(movement.players[0].characterId, id);
+    advance(movement, [{ right: true }, {}], 0.2);
+    assert.ok(movement.players[0].x > 280, id + ' moves');
+    const punch = closeFighters(playing([id, 'emerzon']));
+    landPunch(punch);
+    assert.ok(punch.players[1].hp < 100, id + ' lands a punch');
+    assert.equal(punch.events.filter(e => e.type === 'hit').length, 1);
+    const special = closeFighters(playing([id, 'emerzon']));
+    stepMatch(special, [{ special: true }, {}], 1 / 120);
+    assert.ok(special.players[1].hp < 100 && special.players[1].downTimer > 0, id + ' launches a special');
+    assert.equal(special.players[0].energy, 50);
+  }
 });
 
 test('countdown gates movement and drops, then the full 2:30 fight begins', () => {
