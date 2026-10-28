@@ -20,7 +20,7 @@ export const PUNCH_DURATION = 0.24;
 export const PUNCH_WINDUP = 0.08;
 export const SPECIAL_DURATION = 0.5;
 export const SPECIAL_REACH = 250;
-export const FINISHER_DURATION = 1.45;
+export const FINISHER_DURATION = 5.5;
 export const ITEM_TYPES = [
   { id: 'heal', label: 'Vida extra', short: '+30 HP', color: '#b6f269', duration: 0, description: 'Recupera 30 de vida.' },
   { id: 'speed', label: 'Turbo', short: 'TURBO', color: '#ffe078', duration: 8, description: 'Movimento 45% mais rápido por 8 segundos.' },
@@ -81,6 +81,22 @@ function respawn(state, index) {
     buffs: emptyBuffs(),
   });
   event(state, 'respawn', { player: index, x: player.x, y: 0 });
+}
+
+function completeFinisher(state) {
+  const scene = state.finisher;
+  state.finisher = null;
+  // The cinematic replaces this KO's respawn delay. Return both fighters to
+  // playable poses immediately, while keeping the survivor's health and buffs.
+  respawn(state, scene.player);
+  const survivor = state.players[scene.attacker];
+  Object.assign(survivor, {
+    y: 0, vx: 0, vy: 0, action: 'idle', attackTimer: 0, attackCooldown: 0,
+    specialCooldown: 0, punchPending: false, hitTimer: 0, downTimer: 0,
+    dashTimer: 0, dashCooldown: 0, kickTimer: 0, kickHit: false,
+    jumpBuffer: 0, coyoteTimer: 0.09, previousJump: false, previousDash: false,
+  });
+  state.players.forEach((player, index) => { player.facing = player.x <= state.players[1 - index].x ? 1 : -1; });
 }
 
 function moveBody(player, dt) {
@@ -227,8 +243,18 @@ function updateItems(state, dt) {
 }
 
 function simulate(state, inputs, dt) {
+  if (state.finisher) {
+    const remaining = Math.max(0, state.finisher.at + FINISHER_DURATION - state.elapsed);
+    if (remaining > dt + EPSILON) { state.elapsed += dt; return; }
+    // Consume only the paused part of a boundary-crossing substep; its leftover
+    // time still advances combat, drops and buffs once the scene is complete.
+    const paused = Math.min(dt, remaining);
+    state.elapsed += paused;
+    dt -= paused;
+    completeFinisher(state);
+    if (dt <= 0) return;
+  }
   state.elapsed += dt;
-  if (state.finisher && state.elapsed - state.finisher.at + EPSILON >= FINISHER_DURATION) state.finisher = null;
   if (state.phase === 'countdown') {
     state.countdown = timer(state.countdown, dt);
     if (!state.countdown) { state.phase = 'playing'; event(state, 'start'); }
@@ -281,8 +307,8 @@ function simulate(state, inputs, dt) {
     }
   }
   // Evaluate after both strikes so a simultaneous double KO never names one
-  // fighter as the finisher. This descriptor is presentation only: combat,
-  // the round clock and the normal two-second respawn continue unchanged.
+  // fighter as the finisher. This descriptor also owns the cinematic pause;
+  // ordinary KOs continue to use their normal two-second respawn.
   const finisher = finisherCandidates.find(hit => state.players[hit.attacker].hp > 0 && state.players[hit.targetIndex].hp === 0);
   if (finisher) {
     const snapshot = player => Object.freeze({ ...player, buffs: Object.freeze({ ...player.buffs }) });

@@ -1,6 +1,6 @@
 import { CHARACTERS, ITEM_TYPES, ROUND_DURATION, FINISHER_DURATION, createMatch, stepMatch } from './engine.js';
 import { portraitSVG, drawFighter, drawArena, drawItems } from './art.js';
-import { drawFinisher, FINISHER_IMPACT_AT, getFinisherStage } from './finisher.js';
+import { drawFinisher, FINISHER_IMPACT_TIMES, getFinisherStage } from './finisher.js';
 
 const $=id=>document.getElementById(id);
 const character=id=>CHARACTERS.find(c=>c.id===id)||CHARACTERS[0];
@@ -60,26 +60,26 @@ $('help-button')?.addEventListener('click',()=>showDialog('help-dialog'));
 $('how-button').addEventListener('click',()=>showDialog('help-dialog'));
 $('sound-button').innerHTML=icons.muted;
 $('sound-button').addEventListener('click',()=>{sound=!sound;$('sound-button').innerHTML=icons[sound?'sound':'muted'];$('sound-button').setAttribute('aria-pressed',String(sound));$('sound-button').setAttribute('aria-label',sound?'Desativar efeitos sonoros':'Ativar efeitos sonoros');if(sound)beep('select');});
-function beep(type){
+function beep(type,intensity=1){
   if(!sound)return;
   if(type==='fatality'){
     // A short, synthetic arcade thud, not a realistic injury sound.
     try{
       audio??=new (window.AudioContext||window.webkitAudioContext)();
-      if(audio.state==='suspended')audio.resume();
-      const now=audio.currentTime,duration=.18;
+      if(audio.state==='suspended')audio.resume().catch(()=>{});
+      const now=audio.currentTime,duration=.23,strength=Math.max(.5,Math.min(1.2,intensity));
       const buffer=audio.createBuffer(1,Math.ceil(audio.sampleRate*duration),audio.sampleRate);
       const samples=buffer.getChannelData(0);let seed=517;
       for(let i=0;i<samples.length;i++){seed=(Math.imul(seed,1664525)+1013904223)>>>0;samples[i]=((seed/4294967296)*2-1)*(1-i/samples.length);}
       const noise=audio.createBufferSource(),filter=audio.createBiquadFilter(),gain=audio.createGain();
       noise.buffer=buffer;filter.type='lowpass';filter.frequency.value=1100;
       noise.connect(filter);filter.connect(gain);gain.connect(audio.destination);
-      gain.gain.setValueAtTime(.055,now);gain.gain.exponentialRampToValueAtTime(.001,now+duration);
+      gain.gain.setValueAtTime(.001,now);gain.gain.linearRampToValueAtTime(.055*strength,now+.008);gain.gain.exponentialRampToValueAtTime(.001,now+duration);
       noise.start(now);noise.stop(now+duration);
       const bass=audio.createOscillator(),bassGain=audio.createGain();
       bass.type='triangle';bass.frequency.setValueAtTime(125,now);bass.frequency.exponentialRampToValueAtTime(38,now+duration);
       bass.connect(bassGain);bassGain.connect(audio.destination);
-      bassGain.gain.setValueAtTime(.065,now);bassGain.gain.exponentialRampToValueAtTime(.001,now+duration);
+      bassGain.gain.setValueAtTime(.001,now);bassGain.gain.linearRampToValueAtTime(.065*strength,now+.008);bassGain.gain.exponentialRampToValueAtTime(.001,now+duration);
       bass.start(now);bass.stop(now+duration);
     }catch{/* Audio is optional; the cinematic still completes. */}
     return;
@@ -178,7 +178,7 @@ $('start-local').addEventListener('click',()=>startGame('local',createMatch([sel
 function resetRoundEffects(newState){
   lastEvent=0;eventQueue.length=0;particles.length=0;bloodCtx.clearRect(0,0,1200,600);shake=0;bannerUntil=0;
   finishingShot=null;lastFinisherId=0;
-  $('finisher-caption').hidden=true;canvas.parentElement.classList.remove('finishing');
+  $('finisher-caption').hidden=true;canvas.parentElement.classList.remove('finishing','finishing-blackout');
   renderPositions=newState.players.map(p=>({x:p.x,y:p.y}));
   $('arena-event').hidden=true;
 }
@@ -194,7 +194,7 @@ function startGame(newMode,newState){
   if(!running){running=true;lastFrame=performance.now();animationFrame=requestAnimationFrame(frame);}
   $('exit-game').focus({preventScroll:true});
 }
-function stopGame(){cancelAnimationFrame(animationFrame);animationFrame=0;running=false;mode=null;state=null;finishingShot=null;lastFinisherId=0;$('finisher-caption').hidden=true;canvas.parentElement.classList.remove('finishing');clearInputs();$('arena-event').hidden=true;eventQueue.length=0;$('game-screen').hidden=true;document.querySelector('.site-shell').inert=false;document.body.style.overflow='';$('game-result').hidden=true;$('game-announcement').textContent='';}
+function stopGame(){cancelAnimationFrame(animationFrame);animationFrame=0;running=false;mode=null;state=null;finishingShot=null;lastFinisherId=0;$('finisher-caption').hidden=true;canvas.parentElement.classList.remove('finishing','finishing-blackout');clearInputs();$('arena-event').hidden=true;eventQueue.length=0;$('game-screen').hidden=true;document.querySelector('.site-shell').inert=false;document.body.style.overflow='';$('game-result').hidden=true;$('game-announcement').textContent='';}
 function exitGame(){if(mode==='online')leaveRoom();stopGame();$('local-button').focus({preventScroll:true});}
 $('exit-game').addEventListener('click',exitGame);$('back-selection').addEventListener('click',exitGame);
 $('rematch-button').addEventListener('click',()=>{if(mode==='local')startGame('local',createMatch(state.players.map(p=>p.characterId)));else{send({type:'rematch'});$('rematch-button').disabled=true;$('rematch-button').textContent='AGUARDANDO ADVERSÁRIO...';}});
@@ -308,7 +308,8 @@ function drawParticles(dt){
 }
 function renderBuffs(player,index){
   const chips=ITEM_TYPES.filter(item=>player.buffs?.[item.id]>0).map(item=>`<span class="buff-chip" style="color:${item.color}">${item.short} ${Math.ceil(player.buffs[item.id])}s</span>`);
-  if(player.respawnTimer>0)chips.unshift(`<span class="buff-chip neutral">VOLTA EM ${Math.ceil(player.respawnTimer)}s</span>`);
+  if(finishingShot&&player.hp<=0)chips.unshift('<span class="buff-chip neutral">FINALIZAÇÃO EM ANDAMENTO</span>');
+  else if(player.respawnTimer>0)chips.unshift(`<span class="buff-chip neutral">VOLTA EM ${Math.ceil(player.respawnTimer)}s</span>`);
   else if(player.downTimer>0)chips.unshift('<span class="buff-chip neutral">AO CHÃO</span>');
   else if(player.invulnerableTimer>0)chips.unshift('<span class="buff-chip neutral">PROTEGIDO</span>');
   else if(player.dashCooldown>0)chips.push(`<span class="buff-chip neutral">DASH ${player.dashCooldown.toFixed(1)}s</span>`);
@@ -324,7 +325,7 @@ function syncFinisher(time){
     lastFinisherId=scene.id;
     const elapsed=Math.max(0,state.elapsed-scene.at);
     if(elapsed<FINISHER_DURATION){
-      finishingShot={started:time-elapsed,at:scene.at,attacker:scene.source,target:scene.target,color:character(scene.source.characterId).color,seed:scene.id,impactPlayed:elapsed>=FINISHER_IMPACT_AT,stage:null};
+      finishingShot={started:time-elapsed,at:scene.at,attacker:scene.source,target:scene.target,color:character(scene.source.characterId).color,seed:scene.id,impactsPlayed:new Set(FINISHER_IMPACT_TIMES.flatMap((at,index)=>elapsed>=at?[index]:[])),stage:null};
       clearInputs();shake=0;
       $('finisher-name').textContent=character(scene.source.characterId).name;
       $('finisher-special').textContent='AGARRÃO · '+character(scene.source.characterId).special;
@@ -333,15 +334,29 @@ function syncFinisher(time){
     }
   }
   if(!finishingShot)return -1;
-  const age=Math.max(time-finishingShot.started,state.elapsed-finishingShot.at);
+  const simulatedAge=Math.max(0,state.elapsed-finishingShot.at);
+  // Follow the paused simulation in local play, even after a slow frame or a
+  // background tab. Online interpolation leads the latest server tick by at
+  // most one tick. Only a finished round needs the independent wall clock.
+  const age=state.phase==='finished'?Math.max(time-finishingShot.started,simulatedAge)
+    :mode==='local'?simulatedAge:Math.min(Math.max(time-finishingShot.started,simulatedAge),simulatedAge+1/30);
   if(age>=FINISHER_DURATION){
-    finishingShot=null;$('finisher-caption').hidden=true;canvas.parentElement.classList.remove('finishing');
+    finishingShot=null;$('finisher-caption').hidden=true;canvas.parentElement.classList.remove('finishing','finishing-blackout');
     return -1;
   }
-  if(!finishingShot.impactPlayed&&age>=FINISHER_IMPACT_AT){finishingShot.impactPlayed=true;beep('fatality');}
+  for(let index=0;index<FINISHER_IMPACT_TIMES.length;index++){
+    const at=FINISHER_IMPACT_TIMES[index];
+    if(age>=at&&!finishingShot.impactsPlayed.has(index)){
+      finishingShot.impactsPlayed.add(index);
+      // Skip old beats after a background-tab stall rather than playing a
+      // burst of delayed sounds when the player returns to the window.
+      if(age-at<.35)beep('fatality',.85+index*.15);
+    }
+  }
   const stage=getFinisherStage(age);
   if(stage!==finishingShot.stage){
     finishingShot.stage=stage;
+    canvas.parentElement.classList.toggle('finishing-blackout',stage==='blackout');
     $('finisher-special').textContent=stage==='victory'?'NOCAUTE · +1 KO':stage==='silhouette'?'IMPACTO DECISIVO':'AGARRÃO · '+character(finishingShot.attacker.characterId).special;
   }
   return Math.max(0,age);

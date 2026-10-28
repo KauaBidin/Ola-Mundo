@@ -178,7 +178,7 @@ test('knockdown, KO and respawn clear an unfinished punch', () => {
     assert.equal(state.players[0].punchPending, false);
     assert.equal(state.players[0].attackTimer, 0);
     assert.equal(state.players[0].action, hp === 1 ? 'knockout' : 'down');
-    advance(state, [{}, {}], 2.1);
+    advance(state, [{}, {}], hp === 1 ? FINISHER_DURATION + 0.1 : 2.1);
     assert.equal(state.players[1].hp, 100);
     assert.equal(state.players[0].punchPending, false);
     if (hp === 1) assert.equal(state.players[0].hp, 100);
@@ -443,21 +443,54 @@ test('nonlethal, normal, defended, shielded and double-KO strikes never start a 
   assert.equal(simultaneous.events.some(e => e.type === 'finisher'), false);
 });
 
-test('finisher expires after 1.45s while clock, movement and normal 2s respawn keep running', () => {
-  const state = closeFighters(playing()); state.players[1].hp = 1;
+test('finisher freezes combat for 5.5s, then respawns the target and recovers the survivor', () => {
+  const state = closeFighters(playing()); state.players[0].hp = 85; state.players[1].hp = 1;
+  state.players[0].buffs.speed = 4; state.players[1].buffs.rage = 6;
+  state.items.push({ id: 1, type: 'energy', x: 900, y: 0, vy: 0, ttl: 10 }); state.dropTimer = 2;
   stepMatch(state, [{ special: true }, {}], 1 / 120);
-  assert.equal(FINISHER_DURATION, 1.45);
-  const started = state.elapsed, remaining = state.timeLeft, originalX = state.players[0].x;
-  advance(state, [{ right: true }, {}], 1.4);
-  assert.ok(state.finisher); assert.ok(state.players[0].x > originalX);
-  assert.ok(Math.abs(state.timeLeft - (remaining - 1.4)) < 0.0001);
-  assert.ok(Math.abs(state.players[1].respawnTimer - 0.6) < 0.0001);
-  advance(state, [{}, {}], 0.05);
+  assert.equal(FINISHER_DURATION, 5.5);
+  const started = state.elapsed, clock = state.timeLeft, scene = state.finisher;
+  const players = structuredClone(state.players), items = structuredClone(state.items), dropTimer = state.dropTimer;
+  advance(state, [{ right: true, jump: true, attack: true }, { left: true, special: true }], 5);
+  assert.equal(state.finisher, scene, 'scene is still active after five complete seconds');
+  assert.ok(Math.abs(state.elapsed - started - 5) < 0.0001, 'presentation time advances');
+  assert.equal(state.timeLeft, clock);
+  assert.deepEqual(state.players, players, 'movement, buffs, attacks, health and respawn timers all freeze');
+  assert.deepEqual(state.items, items); assert.equal(state.dropTimer, dropTimer);
+  assert.deepEqual(state.scores, [1, 0]);
+  advance(state, [{}, {}], 0.5, 120);
   assert.equal(state.finisher, null);
-  assert.equal(state.players[1].hp, 0);
-  advance(state, [{}, {}], 0.55);
-  assert.ok(Math.abs(state.elapsed - started - 2) < 0.0001);
-  assert.equal(state.players[1].hp, 100); assert.equal(state.players[1].respawnTimer, 0);
-  assert.ok(Math.abs(state.timeLeft - (remaining - 2)) < 0.0001);
+  assert.ok(Math.abs(state.elapsed - started - 5.5) < 0.0001);
+  assert.ok(Math.abs(state.timeLeft - clock) < 0.0001, 'cinematic consumes none of the 150s combat clock');
+  const [survivor, target] = state.players;
+  assert.equal(target.hp, 100); assert.equal(target.energy, 100); assert.equal(target.respawnTimer, 0);
+  assert.equal(target.x, 720); assert.ok(Math.abs(target.invulnerableTimer - 1.5) < 0.0001);
+  assert.equal(survivor.hp, players[0].hp); assert.ok(Math.abs(survivor.energy - players[0].energy) < 0.000001);
+  for (const key of Object.keys(survivor.buffs)) assert.ok(Math.abs(survivor.buffs[key] - players[0].buffs[key]) < 0.000001, key);
+  assert.equal(survivor.x, players[0].x); assert.equal(survivor.y, 0);
+  for (const key of ['vx', 'vy', 'attackTimer', 'attackCooldown', 'specialCooldown', 'hitTimer', 'kickTimer', 'dashTimer', 'dashCooldown']) assert.equal(survivor[key], 0, key);
+  assert.equal(survivor.action, 'idle'); assert.equal(survivor.punchPending, false);
+  assert.deepEqual(state.scores, [1, 0], 'scene exit never awards another point');
+  stepMatch(state, [{}, {}], 0.1);
+  assert.ok(Math.abs(state.timeLeft - (clock - 0.1)) < 0.0001);
+  assert.ok(Math.abs(state.players[0].buffs.speed - (players[0].buffs.speed - 0.1)) < 0.0001);
+  assert.ok(Math.abs(state.items[0].ttl - (items[0].ttl - 0.1)) < 0.0001);
   assert.equal(createMatch().finisher, null, 'fresh rounds and rematches reset the scene');
+});
+
+test('a substep crossing cinematic expiry preserves every remaining millisecond of combat', () => {
+  const state = closeFighters(playing()); state.players[1].hp = 1;
+  state.items.push({ id: 1, type: 'energy', x: 900, y: 0, vy: 0, ttl: 10 });
+  stepMatch(state, [{ special: true }, {}], 1 / 120);
+  state.elapsed = state.finisher.at + FINISHER_DURATION - 0.005;
+  state.players[0].buffs.speed = 4;
+  const before = { elapsed: state.elapsed, clock: state.timeLeft, ttl: state.items[0].ttl, drop: state.dropTimer };
+  stepMatch(state, [{}, {}], 0.05);
+  assert.equal(state.finisher, null);
+  assert.ok(Math.abs(state.elapsed - (before.elapsed + 0.05)) < 0.000001);
+  assert.ok(Math.abs(state.timeLeft - (before.clock - 0.045)) < 0.000001);
+  assert.ok(Math.abs(state.items[0].ttl - (before.ttl - 0.045)) < 0.000001);
+  assert.ok(Math.abs(state.dropTimer - (before.drop - 0.045)) < 0.000001);
+  assert.ok(Math.abs(state.players[0].buffs.speed - (4 - 0.045)) < 0.000001);
+  assert.ok(Math.abs(state.players[1].invulnerableTimer - (1.5 - 0.045)) < 0.000001);
 });

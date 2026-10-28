@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { CHARACTERS, FINISHER_DURATION, createMatch, stepMatch } from '../public/engine.js';
-import { drawFinisher, getFinisherStage, FINISHER_IMPACT_AT } from '../public/finisher.js';
+import { drawFinisher, getFinisherStage, FINISHER_IMPACT_AT, FINISHER_IMPACT_TIMES } from '../public/finisher.js';
 
 // Record effective Canvas state as well as geometry, so these checks catch
 // accidental frame-history randomness and leaked clipping/compositing state.
@@ -58,12 +58,15 @@ function cinematicFor(index) {
   });
 }
 
-test('finisher stages follow grab, silhouette impact and victory within the existing 1.45s window', () => {
-  assert.equal(FINISHER_DURATION, 1.45);
-  for (const age of [-1, 0, 0.399, NaN, Infinity]) assert.equal(getFinisherStage(age), 'grab');
-  for (const age of [0.4, FINISHER_IMPACT_AT, 0.819]) assert.equal(getFinisherStage(age), 'silhouette');
-  for (const age of [0.82, 1.44, FINISHER_DURATION, 2]) assert.equal(getFinisherStage(age), 'victory');
-  assert.ok(FINISHER_IMPACT_AT > 0.4 && FINISHER_IMPACT_AT < 0.82);
+test('the 5.5s finisher stages neck grab, blackout, silhouette and victory at shared impact times', () => {
+  assert.equal(FINISHER_DURATION, 5.5);
+  for (const age of [-1, 0, 1.099, NaN, Infinity]) assert.equal(getFinisherStage(age), 'grab');
+  for (const age of [1.1, FINISHER_IMPACT_AT, 3.499]) assert.equal(getFinisherStage(age), 'blackout');
+  for (const age of [3.5, 4, 4.299]) assert.equal(getFinisherStage(age), 'silhouette');
+  for (const age of [4.3, 5.49, FINISHER_DURATION, 6]) assert.equal(getFinisherStage(age), 'victory');
+  assert.deepEqual(FINISHER_IMPACT_TIMES, [1.4, 2.2, 3]);
+  assert.equal(FINISHER_IMPACT_AT, FINISHER_IMPACT_TIMES[0]);
+  for (const age of FINISHER_IMPACT_TIMES) assert.equal(getFinisherStage(age), 'blackout');
 });
 
 test('all eleven finishers draw deterministically without mutating snapshots or leaking Canvas state', () => {
@@ -71,7 +74,7 @@ test('all eleven finishers draw deterministically without mutating snapshots or 
     const scene = cinematicFor(index), before = structuredClone(scene);
     assert.ok(Object.isFrozen(scene.attacker) && Object.isFrozen(scene.target));
     for (const reducedMotion of [false, true]) {
-      for (const age of [0, 0.2, 0.4, FINISHER_IMPACT_AT, 0.7, 0.82, 1.1, 1.44]) {
+      for (const age of [0, 0.6, 1.1, 1.4, 2.2, 3, 3.49, 3.5, 3.9, 4.3, 4.9, 5.49]) {
         const first = recordingContext(), baseline = first.snapshot();
         drawFinisher(first.context, scene, age, reducedMotion);
         assert.equal(first.depth(), 0, `${CHARACTERS[index].name}: balanced save/restore`);
@@ -88,7 +91,7 @@ test('all eleven finishers draw deterministically without mutating snapshots or 
 
 test('reduced motion keeps the cinematic camera steady through impact and skips bright screen flashes', () => {
   const scene = cinematicFor(4), cameraTraces = [];
-  for (const age of [0.2, 0.4, FINISHER_IMPACT_AT, 0.6, 0.82, 1.2]) {
+  for (const age of [0.6, 1.1, 1.4, 2.2, 3, 3.5, 4.3, 5.1]) {
     const render = recordingContext();
     drawFinisher(render.context, scene, age, true);
     const camera = render.operations.filter(operation => operation.depth === 1 && ['translate', 'scale', 'rotate'].includes(operation.method));
@@ -96,7 +99,7 @@ test('reduced motion keeps the cinematic camera steady through impact and skips 
       if (operation.method === 'scale') assert.deepEqual(operation.args, [1, 1], 'reduced motion never zooms the camera');
       if (operation.method === 'rotate') assert.equal(operation.args[0], 0, 'reduced motion never rotates the camera');
     }
-    cameraTraces.push(camera.map(({ method, args }) => ({ method, args })));
+    if (camera.length) cameraTraces.push(camera.map(({ method, args }) => ({ method, args })));
     const flashes = render.operations.filter(operation => {
       if (operation.method !== 'fillRect' || typeof operation.fill !== 'string' || operation.alpha <= 0.1) return false;
       const color = operation.fill.match(/^#([\da-f]{2})([\da-f]{2})([\da-f]{2})(?:[\da-f]{2})?$/i);

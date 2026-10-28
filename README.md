@@ -30,7 +30,7 @@ O servidor HTTP e WebSocket escuta na porta `3000`, em `0.0.0.0`. `PORT` e `HOST
 | Defender | S | ↓ |
 | Arrancada (dash) | Shift esquerdo | Shift direito |
 
-A partida dura **2min30s completos de combate**, além da contagem inicial. Cada nocaute vale um ponto; o lutador retorna após 2 segundos com vida cheia e breve proteção. Vence quem tiver mais nocautes quando o tempo acabar. A vida restante desempata; com os dois critérios iguais, há empate. Um nocaute não encerra a partida antes do tempo.
+A partida dura **2min30s completos de combate**, além da contagem inicial. Cada nocaute vale um ponto; um nocaute comum permite retornar após 2 segundos com vida cheia e breve proteção; na finalização cinematográfica, o retorno acontece ao fim da cena. Vence quem tiver mais nocautes quando o tempo acabar. A vida restante desempata; com os dois critérios iguais, há empate. Um nocaute não encerra a partida antes do tempo.
 
 A movimentação tem aceleração, desaceleração, controle aéreo e salto com tolerância ao apertar perto da aterrissagem. Use **Shift** com uma direção para uma arrancada curta; a recarga é de 0,9 segundo. No celular, há um botão **DASH**.
 
@@ -97,10 +97,10 @@ A partida preenche a janela disponível sem rolagem e mantém a proporção do d
 
 ## Finalização cinematográfica
 
-Quando um **especial sem bloqueio causa nocaute**, o jogo aproxima a cena dos dois lutadores: o atacante se aproxima e faz um agarrão com as duas mãos; o impacto é mostrado em silhuetas, com partículas vermelhas abstratas, e termina em uma pose de vitória. Os dois personagens permanecem inteiros. A animação usa os próprios lutadores, com fundo escurecido e tremor breve de câmera. Dura **1,45 segundo** e funciona com os 11 lutadores nos modos local e online.
+Quando um **especial sem bloqueio causa nocaute**, o jogo aproxima a cena dos dois lutadores: o atacante se aproxima e faz um agarrão com as duas mãos; a cena corta para tela preta com três impactos sintéticos, reaparece em silhuetas com partículas vermelhas abstratas e termina em uma pose de vitória. Os dois personagens permanecem inteiros. A animação usa os próprios lutadores, com fundo escurecido e tremor breve de câmera. Dura **5,5 segundos** e funciona com os 11 lutadores nos modos local e online.
 
-Use o especial normal: **G** para P1/online, **L** para P2 local ou **ESP** no toque. Não há tecla extra. O nocaute vale +1, o relógio de 2min30 continua e o rival retorna nos 2 segundos habituais. Os comandos de ataque/movimento ficam bloqueados durante a cena para evitar ações às cegas; sair da arena continua disponível. Um nocaute duplo, um soco comum ou um especial defendido não ativam a cena.
+Use o especial normal: **G** para P1/online, **L** para P2 local ou **ESP** no toque. Não há tecla extra. O nocaute vale +1. O relógio, a movimentação, os itens e os efeitos temporários ficam pausados durante os 5,5 segundos. O rival retorna com vida cheia ao fim da cena, sem aguardar mais 2 segundos; os nocautes comuns continuam com retorno em 2 segundos. Os comandos de ataque/movimento ficam bloqueados durante a cena para evitar ações às cegas; sair da arena continua disponível. Um nocaute duplo, um soco comum ou um especial defendido não ativam a cena.
 
 No online, o servidor envia o momento do golpe e um retrato imutável do estado de cada lutador; os dois clientes reproduzem a mesma finalização. Se o tempo acabar durante a cena, o resultado aparece quando a animação terminar. A preferência do sistema por **movimento reduzido** remove a aproximação animada e o tremor e reduz as partículas.
 
-O impacto usa áudio sintético de arcade, sincronizado uma vez por cena. Para ouvi-lo, ative o ícone de som na seleção antes de entrar na arena. O mudo continua sendo respeitado.
+A tela preta ocupa o trecho de 1,1 a 3,5 segundos; três impactos sintéticos de arcade tocam em 1,4, 2,2 e 3 segundos, uma vez por batida. Para ouvi-lo, ative o ícone de som na seleção antes de entrar na arena. O mudo continua sendo respeitado.

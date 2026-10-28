@@ -164,7 +164,7 @@ test('guest fighters retain their choices through online matchmaking and rematch
   assert.deepEqual(rematch.scores, [0, 0]);
 });
 
-test('online finishers persist for late state delivery without pausing the round or respawn', async t => {
+test('online finishers persist, freeze combat for over 5s and resume on the exact expiry boundary', async t => {
   const app = createGameServer({ port: 0, host: '127.0.0.1' }); t.after(() => app.close());
   const { port } = await app.ready;
   const host = await client(`ws://127.0.0.1:${port}/ws`);
@@ -175,7 +175,7 @@ test('online finishers persist for late state delivery without pausing the round
   guest.send({ type: 'join', code: lobby.code, characterId: 'bolsonaro' });
   await guest.wait('state');
   const room = app.rooms.get(lobby.code);
-  room.state.phase = 'playing'; room.state.countdown = 0; room.state.timeLeft = 3;
+  room.state.phase = 'playing'; room.state.countdown = 0; room.state.timeLeft = 20;
   room.state.players[0].x = 400; room.state.players[1].x = 480; room.state.players[1].hp = 1;
   host.send({ type: 'input', input: { special: true } });
   const first = (await guest.wait('state', message => !!message.state.finisher)).state;
@@ -188,12 +188,20 @@ test('online finishers persist for late state delivery without pausing the round
   const later = (await guest.wait('state', message => message.state.elapsed > first.elapsed && message.state.finisher?.id === scene.id)).state;
   assert.equal(JSON.stringify(later.finisher), recorded, 'later state carries the same detached snapshots');
   assert.equal(later.events.some(e => e.type === 'finisher'), false, 'persistent scene survives transient event delivery');
-  const expired = (await guest.wait('state', message => message.state.finisher === null && message.state.timeLeft < 2)).state;
-  assert.ok(expired.elapsed - scene.at >= 1.45);
-  assert.equal(expired.players[1].hp, 0, 'scene ends before the ordinary respawn');
-  assert.ok(expired.timeLeft < 1.6, 'clock continued through the scene');
-  const respawn = (await guest.wait('state', message => message.state.players[1].hp === 100 && message.state.players[1].respawnTimer === 0)).state;
-  assert.ok(respawn.elapsed - scene.at >= 1.99);
-  assert.ok(respawn.timeLeft <= 1.05);
-  assert.deepEqual(respawn.scores, [1, 0]);
+  assert.equal(later.timeLeft, first.timeLeft); assert.deepEqual(later.players, first.players);
+  // Accelerate only the presentation clock, avoiding a 5.5s wall-clock sleep.
+  // The authoritative loop must still hold combat and then split its exit tick.
+  room.state.elapsed = scene.at + 5.1;
+  const held = (await guest.wait('state', message => message.state.finisher?.id === scene.id && message.state.elapsed >= scene.at + 5.12)).state;
+  assert.equal(held.timeLeft, first.timeLeft); assert.deepEqual(held.players, first.players);
+  assert.equal(JSON.stringify(held.finisher), recorded);
+  room.state.elapsed = scene.at + 5.495;
+  const resumed = (await guest.wait('state', message => message.state.finisher === null)).state;
+  const liveTime = resumed.elapsed - (scene.at + 5.5);
+  assert.ok(liveTime >= 0 && liveTime < 0.1);
+  assert.ok(Math.abs(resumed.timeLeft - (first.timeLeft - liveTime)) < 0.000001, 'no combat time is lost at scene exit');
+  assert.equal(resumed.players[1].hp, 100); assert.equal(resumed.players[1].respawnTimer, 0);
+  assert.ok(Math.abs(resumed.players[1].invulnerableTimer - (1.5 - liveTime)) < 0.000001);
+  assert.equal(resumed.players[0].kickTimer, 0); assert.equal(resumed.players[0].vx, 0);
+  assert.deepEqual(resumed.scores, [1, 0]);
 });

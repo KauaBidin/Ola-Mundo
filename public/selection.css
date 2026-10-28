@@ -74,3 +74,6 @@
 .canvas-wrap.finishing .arena-event,.canvas-wrap.finishing .drop-status,.canvas-wrap.finishing .game-announcement{visibility:hidden}
 @media(max-width:680px){.finisher-caption{padding:16px}.finisher-caption strong{font-size:26px}.finisher-kicker{font-size:6px;letter-spacing:1px}.finisher-caption p{font-size:8px}}
 @media(max-height:500px){.finisher-caption{padding:8px 16px}.finisher-caption>div{gap:2px}.finisher-caption strong{font-size:24px}.finisher-kicker{font-size:6px;letter-spacing:1px}#finisher-name{font-size:16px}.finisher-caption p{font-size:8px;padding:5px 8px}}
+/* Keep the cut to black free of lettering; HUD and exit stay available. */
+.canvas-wrap.finishing-blackout .finisher-caption{visibility:hidden}
+.canvas-wrap.finishing-blackout,.canvas-wrap.finishing-blackout canvas{background:#000}
