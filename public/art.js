@@ -321,6 +321,53 @@ export function portraitSVG(character, small=false) {
   return `<svg class="portrait" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 240" role="img" aria-label="Ilustração pixel art de ${character.name}"><defs><radialGradient id="glow-${id}${small?'s':''}"><stop stop-color="${color}" stop-opacity=".18"/><stop offset="1" stop-color="${color}" stop-opacity="0"/></radialGradient></defs><rect width="280" height="240" fill="#211e29"/><rect width="280" height="240" fill="url(#glow-${id}${small?'s':''})"/>${racks}<path d="M0 195h280M140 195 0 240m140-45 140 45M140 195l-65 45m65-45 65 45M0 215h280M0 237h280" stroke="${color}" stroke-opacity=".12"/><path d="M0 0h90L0 190z" fill="${color}" opacity=".025"/><text x="20" y="187" fill="${color}" opacity=".2" font-family="monospace" font-size="7">${id==='kaua'?'&gt; auto.combo()':id==='jose'?'&gt; weakness.found':id==='douglas'?'&gt; access: admin':'&gt; system.ready'}</text><ellipse cx="146" cy="222" rx="67" ry="9" fill="#08080e" opacity=".7"/><ellipse cx="146" cy="224" rx="64" ry="7" fill="none" stroke="${color}" stroke-opacity=".4"/>${fighter}<path d="M16 211v12h12m224-12v12h-12" fill="none" stroke="${color}" opacity=".35"/></svg>`;
 }
 
+// Cinematic poses reuse the real character artwork, including the four original
+// atlases. The kneeling pose keeps the identifiable upper body and folds its
+// legs explicitly; it never turns a defeated fighter into another character.
+export function drawFinisherPose(ctx, player, x, ground, scale, pose='punch', extension=1, facing=player.facing) {
+  const id=player.characterId, look=LOOKS[id]||LOOKS.emerzon;
+  const amount=Math.max(0,Math.min(1,extension));
+  const crop=cropFor(id), image=SHEETS[id]?.image;
+  const atlasReady=Object.hasOwn(PUNCH_ROWS,id)&&punchSheet?.complete&&punchSheet.naturalWidth;
+  const idleReady=image?.complete&&image.naturalWidth;
+  const isKneel=pose==='kneel';
+  const pixelPose=isKneel?'idle':'attack';
+  const frame=isKneel?0:amount<.25?0:amount<.65?1:2;
+  const paintBody=()=>{
+    if(atlasReady) {
+      const row=PUNCH_ROWS[id],feet=PUNCH_FEET[row],width=362/feet*110;
+      ctx.drawImage(punchSheet,frame*362,row*362,362,feet,-width/2,-110,width,110);
+      if(id==='jose'&&!isKneel&&frame>0) {
+        ctx.fillStyle='#eef1e9';ctx.fillRect(-17,-76,8,8);ctx.fillRect(-20,-74,3,4);
+        ctx.fillStyle='#67432c';ctx.fillRect(-16,-76,6,2);
+      }
+    } else if(idleReady&&isKneel) {
+      const width=crop.width/crop.height*110;
+      ctx.drawImage(image,crop.x,crop.y,crop.width,crop.height,-width/2,-110,width,110);
+    } else {
+      ctx.save();ctx.translate(-34,-110);
+      for(const [rx,ry,w,h,color] of sprite(id,pixelPose,0,amount)) {
+        ctx.fillStyle=color;ctx.fillRect(rx,ry,w,h);
+      }
+      ctx.restore();
+    }
+  };
+  ctx.save();ctx.translate(x,ground);ctx.scale((facing<0?-1:1)*scale,scale);
+  ctx.imageSmoothingEnabled=false;
+  if(isKneel) {
+    // One grounded knee, one planted foot, with the upper body visibly bowed.
+    ctx.fillStyle=look.pants;ctx.fillRect(-16,-30,20,16);ctx.fillRect(-7,-20,31,14);
+    ctx.fillStyle=look.dark;ctx.fillRect(12,-15,13,13);ctx.fillRect(-19,-16,13,14);
+    ctx.fillStyle='#14151f';ctx.fillRect(10,-5,24,5);ctx.fillRect(-22,-5,17,5);
+    ctx.fillStyle='#ffffff15';ctx.fillRect(-13,-27,13,3);ctx.fillRect(3,-17,15,3);
+    ctx.save();ctx.translate(-5,28);ctx.rotate(.13);
+    ctx.beginPath();ctx.rect(-90,-120,190,84);ctx.clip();paintBody();ctx.restore();
+  } else {
+    ctx.rotate(-amount*.045);paintBody();
+  }
+  ctx.restore();
+}
+
 export function drawFighter(ctx, player, x, ground, scale, time) {
   const accent=LOOKS[player.characterId]?.accent||'#fff';
   const crop=cropFor(player.characterId), fighterSheet=SHEETS[player.characterId]?.image;

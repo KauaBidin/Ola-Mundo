@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { CHARACTERS, ITEM_TYPES, ROUND_DURATION, PUNCH_DURATION, PUNCH_WINDUP, SPECIAL_DURATION, SPECIAL_REACH, createMatch, stepMatch } from '../public/engine.js';
+import { CHARACTERS, ITEM_TYPES, ROUND_DURATION, PUNCH_DURATION, PUNCH_WINDUP, SPECIAL_DURATION, SPECIAL_REACH, FINISHER_DURATION, createMatch, stepMatch } from '../public/engine.js';
 
 const playing = (ids, seed = 12345) => { const match = createMatch(ids, { seed }); match.phase = 'playing'; match.countdown = 0; return match; };
 const advance = (state, inputs, seconds, hz = 60) => {
@@ -392,4 +392,72 @@ test('all positive-damage strikes identify blood eligibility, including defense 
     assert.ok(damage.damage > 0 && damage.blood); assert.equal(damage.special, special);
     assert.equal(damage.knockdown, special && !block);
   }
+});
+
+test('an unblocked lethal special emits one finisher with immutable detached fighter snapshots', () => {
+  const state = closeFighters(playing(['lula', 'bolsonaro']));
+  assert.equal(state.finisher, null);
+  state.players[0].buffs.speed = 3; state.players[1].buffs.rage = 4;
+  state.players[1].hp = 1;
+  stepMatch(state, [{ special: true }, {}], 1 / 120);
+  const scenes = state.events.filter(e => e.type === 'finisher');
+  assert.equal(scenes.length, 1);
+  const scene = scenes[0];
+  assert.equal(state.finisher, scene);
+  assert.equal(scene.attacker, 0); assert.equal(scene.player, 1);
+  assert.equal(scene.at, state.elapsed);
+  assert.equal(scene.source.characterId, 'lula'); assert.ok(scene.source.hp > 0);
+  assert.equal(scene.target.characterId, 'bolsonaro'); assert.equal(scene.target.hp, 0);
+  assert.equal(scene.target.action, 'knockout'); assert.equal(scene.target.respawnTimer, 2);
+  assert.ok(state.events.findIndex(e => e.type === 'ko') < state.events.indexOf(scene));
+  for (const object of [scene, scene.source, scene.target, scene.source.buffs, scene.target.buffs]) assert.ok(Object.isFrozen(object));
+  assert.notEqual(scene.source, state.players[0]); assert.notEqual(scene.target, state.players[1]);
+  assert.notEqual(scene.source.buffs, state.players[0].buffs); assert.notEqual(scene.target.buffs, state.players[1].buffs);
+  const captured = structuredClone(scene);
+  state.players[0].x += 20; state.players[0].buffs.speed = 0;
+  state.players[1].x -= 20; state.players[1].buffs.rage = 0;
+  stepMatch(state, [{}, {}], 0.1);
+  assert.equal(state.events.some(e => e.type === 'finisher'), false, 'later frames do not duplicate the event');
+  assert.deepEqual(scene, captured, 'simulation cannot alter recorded positions, health or buffs');
+  assert.equal(state.finisher, scene, 'persistent descriptor survives the transient events array');
+});
+
+test('nonlethal, normal, defended, shielded and double-KO strikes never start a finisher', () => {
+  const nonlethal = closeFighters(playing());
+  stepMatch(nonlethal, [{ special: true }, {}], 1 / 120);
+  assert.equal(nonlethal.finisher, null);
+  const normal = closeFighters(playing()); normal.players[1].hp = 1;
+  landPunch(normal); assert.equal(normal.players[1].hp, 0); assert.equal(normal.finisher, null);
+  for (const shield of [false, true]) {
+    const defended = closeFighters(playing()); defended.players[1].hp = 1;
+    if (shield) defended.players[1].buffs.shield = 8;
+    stepMatch(defended, [{ special: true }, shield ? {} : { block: true }], 1 / 120);
+    assert.equal(defended.players[1].hp, 0, 'even lethal chip remains a normal KO');
+    assert.equal(defended.finisher, null);
+    assert.equal(defended.events.some(e => e.type === 'finisher'), false);
+  }
+  const simultaneous = closeFighters(playing()); simultaneous.players.forEach(p => { p.hp = 1; });
+  stepMatch(simultaneous, [{ special: true }, { special: true }], 1 / 120);
+  assert.deepEqual(simultaneous.scores, [1, 1]);
+  assert.equal(simultaneous.finisher, null);
+  assert.equal(simultaneous.events.some(e => e.type === 'finisher'), false);
+});
+
+test('finisher expires after 1.45s while clock, movement and normal 2s respawn keep running', () => {
+  const state = closeFighters(playing()); state.players[1].hp = 1;
+  stepMatch(state, [{ special: true }, {}], 1 / 120);
+  assert.equal(FINISHER_DURATION, 1.45);
+  const started = state.elapsed, remaining = state.timeLeft, originalX = state.players[0].x;
+  advance(state, [{ right: true }, {}], 1.4);
+  assert.ok(state.finisher); assert.ok(state.players[0].x > originalX);
+  assert.ok(Math.abs(state.timeLeft - (remaining - 1.4)) < 0.0001);
+  assert.ok(Math.abs(state.players[1].respawnTimer - 0.6) < 0.0001);
+  advance(state, [{}, {}], 0.05);
+  assert.equal(state.finisher, null);
+  assert.equal(state.players[1].hp, 0);
+  advance(state, [{}, {}], 0.55);
+  assert.ok(Math.abs(state.elapsed - started - 2) < 0.0001);
+  assert.equal(state.players[1].hp, 100); assert.equal(state.players[1].respawnTimer, 0);
+  assert.ok(Math.abs(state.timeLeft - (remaining - 2)) < 0.0001);
+  assert.equal(createMatch().finisher, null, 'fresh rounds and rematches reset the scene');
 });

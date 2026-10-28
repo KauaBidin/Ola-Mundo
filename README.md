@@ -94,3 +94,11 @@ Além dos quatro personagens originais, o jogo inclui **Lula, Bolsonaro, Nikolas
 Use a busca e as setas laterais para escolher entre os 11 lutadores. A busca aceita nomes sem acentos e aliases como **Jair Bolsonaro** e **Tung Tung Sahur**. O modo local oferece a mesma busca e navegação para o Jogador 2. A escolha permanece ao mudar de página ou limpar a busca.
 
 A partida preenche a janela disponível sem rolagem e mantém a proporção do desenho. Veja `ATUALIZACAO.md` para os detalhes do pacote completo; o antigo `ajuste-tela.zip` é mantido apenas por histórico.
+
+## Finalização cinematográfica
+
+Quando um **especial sem bloqueio causa nocaute**, o jogo aproxima a cena dos dois lutadores: o atacante concentra energia mágica e dispara um golpe luminoso contra o adversário ajoelhado. A animação usa os próprios personagens, com partículas em pixel art, fundo escurecido, impacto e tremor breve de câmera. Dura **1,45 segundo** e funciona com os 11 lutadores nos modos local e online.
+
+Use o especial normal: **G** para P1/online, **L** para P2 local ou **ESP** no toque. Não há tecla extra. O nocaute vale +1, o relógio de 2min30 continua e o rival retorna nos 2 segundos habituais. Os comandos de ataque/movimento ficam bloqueados durante a cena para evitar ações às cegas; sair da arena continua disponível. Um nocaute duplo, um soco comum ou um especial defendido não ativam a cena.
+
+No online, o servidor envia o momento do golpe e um retrato imutável do estado de cada lutador; os dois clientes reproduzem a mesma finalização. Se o tempo acabar durante a cena, o resultado aparece quando a animação terminar. A preferência do sistema por **movimento reduzido** remove zoom, tremor e flash e reduz as partículas.

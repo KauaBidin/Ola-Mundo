@@ -20,6 +20,7 @@ export const PUNCH_DURATION = 0.24;
 export const PUNCH_WINDUP = 0.08;
 export const SPECIAL_DURATION = 0.5;
 export const SPECIAL_REACH = 250;
+export const FINISHER_DURATION = 1.45;
 export const ITEM_TYPES = [
   { id: 'heal', label: 'Vida extra', short: '+30 HP', color: '#b6f269', duration: 0, description: 'Recupera 30 de vida.' },
   { id: 'speed', label: 'Turbo', short: 'TURBO', color: '#ffe078', duration: 8, description: 'Movimento 45% mais rápido por 8 segundos.' },
@@ -40,7 +41,7 @@ const spawnX = index => index ? 720 : 280;
 export function createMatch(ids = ['emerzon', 'douglas'], { seed = Math.floor(Math.random() * 0xffffffff) } = {}) {
   return {
     phase: 'countdown', countdown: 3, timeLeft: ROUND_DURATION, winner: null,
-    elapsed: 0, eventId: 0, events: [], scores: [0, 0], items: [],
+    elapsed: 0, eventId: 0, events: [], finisher: null, scores: [0, 0], items: [],
     dropTimer: 4, itemId: 0, randomSeed: (Number(seed) >>> 0) || 0x9e3779b9,
     players: [0, 1].map(index => ({
       characterId: characterFor(ids[index]).id, x: spawnX(index),
@@ -56,7 +57,9 @@ export function createMatch(ids = ['emerzon', 'douglas'], { seed = Math.floor(Ma
 }
 
 function event(state, type, data = {}) {
-  state.events.push({ id: ++state.eventId, type, ...data });
+  const record = { id: ++state.eventId, type, ...data };
+  state.events.push(record);
+  return record;
 }
 
 function random(state) {
@@ -225,6 +228,7 @@ function updateItems(state, dt) {
 
 function simulate(state, inputs, dt) {
   state.elapsed += dt;
+  if (state.finisher && state.elapsed - state.finisher.at + EPSILON >= FINISHER_DURATION) state.finisher = null;
   if (state.phase === 'countdown') {
     state.countdown = timer(state.countdown, dt);
     if (!state.countdown) { state.phase = 'playing'; event(state, 'start'); }
@@ -253,6 +257,7 @@ function simulate(state, inputs, dt) {
     const damage = Math.max(1, Math.round(baseDamage * (source.buffs.rage > 0 ? 1.35 : 1) * (blocked ? 0.2 : shielded ? 0.35 : 1)));
     hits.push({ ...strike, targetIndex, damage, blocked: blocked || shielded, knockdown: strike.special && !blocked && !shielded, direction: source.facing });
   }
+  const finisherCandidates = [];
   for (const hit of hits) {
     if (hit.special) state.players[hit.attacker].kickHit = true;
     const target = state.players[hit.targetIndex];
@@ -272,7 +277,19 @@ function simulate(state, inputs, dt) {
       state.scores[hit.attacker]++;
       target.action = 'knockout'; target.respawnTimer = 2; target.downTimer = 0; target.hitTimer = 0; target.kickTimer = 0; target.punchPending = false;
       event(state, 'ko', { player: hit.targetIndex, attacker: hit.attacker, x: target.x, y: target.y });
+      if (hit.special && !hit.blocked) finisherCandidates.push(hit);
     }
+  }
+  // Evaluate after both strikes so a simultaneous double KO never names one
+  // fighter as the finisher. This descriptor is presentation only: combat,
+  // the round clock and the normal two-second respawn continue unchanged.
+  const finisher = finisherCandidates.find(hit => state.players[hit.attacker].hp > 0 && state.players[hit.targetIndex].hp === 0);
+  if (finisher) {
+    const snapshot = player => Object.freeze({ ...player, buffs: Object.freeze({ ...player.buffs }) });
+    state.finisher = Object.freeze(event(state, 'finisher', {
+      at: state.elapsed, attacker: finisher.attacker, player: finisher.targetIndex,
+      source: snapshot(state.players[finisher.attacker]), target: snapshot(state.players[finisher.targetIndex]),
+    }));
   }
   updateItems(state, dt);
   if (!state.timeLeft) {

@@ -163,3 +163,37 @@ test('guest fighters retain their choices through online matchmaking and rematch
   assert.deepEqual(rematch.players.map(p => p.characterId), ['lula', 'tun-tum-sarhur']);
   assert.deepEqual(rematch.scores, [0, 0]);
 });
+
+test('online finishers persist for late state delivery without pausing the round or respawn', async t => {
+  const app = createGameServer({ port: 0, host: '127.0.0.1' }); t.after(() => app.close());
+  const { port } = await app.ready;
+  const host = await client(`ws://127.0.0.1:${port}/ws`);
+  const guest = await client(`ws://127.0.0.1:${port}/ws`);
+  t.after(() => { host.socket.terminate(); guest.socket.terminate(); });
+  host.send({ type: 'create', characterId: 'lula' });
+  const lobby = await host.wait('room');
+  guest.send({ type: 'join', code: lobby.code, characterId: 'bolsonaro' });
+  await guest.wait('state');
+  const room = app.rooms.get(lobby.code);
+  room.state.phase = 'playing'; room.state.countdown = 0; room.state.timeLeft = 3;
+  room.state.players[0].x = 400; room.state.players[1].x = 480; room.state.players[1].hp = 1;
+  host.send({ type: 'input', input: { special: true } });
+  const first = (await guest.wait('state', message => !!message.state.finisher)).state;
+  host.send({ type: 'input', input: {} });
+  const scene = first.finisher, recorded = JSON.stringify(scene);
+  assert.equal(scene.type, 'finisher'); assert.equal(scene.source.characterId, 'lula');
+  assert.equal(scene.target.characterId, 'bolsonaro'); assert.equal(scene.target.hp, 0);
+  assert.equal(scene.attacker, 0); assert.equal(scene.player, 1);
+  assert.ok(first.events.some(e => e.type === 'finisher' && e.id === scene.id));
+  const later = (await guest.wait('state', message => message.state.elapsed > first.elapsed && message.state.finisher?.id === scene.id)).state;
+  assert.equal(JSON.stringify(later.finisher), recorded, 'later state carries the same detached snapshots');
+  assert.equal(later.events.some(e => e.type === 'finisher'), false, 'persistent scene survives transient event delivery');
+  const expired = (await guest.wait('state', message => message.state.finisher === null && message.state.timeLeft < 2)).state;
+  assert.ok(expired.elapsed - scene.at >= 1.45);
+  assert.equal(expired.players[1].hp, 0, 'scene ends before the ordinary respawn');
+  assert.ok(expired.timeLeft < 1.6, 'clock continued through the scene');
+  const respawn = (await guest.wait('state', message => message.state.players[1].hp === 100 && message.state.players[1].respawnTimer === 0)).state;
+  assert.ok(respawn.elapsed - scene.at >= 1.99);
+  assert.ok(respawn.timeLeft <= 1.05);
+  assert.deepEqual(respawn.scores, [1, 0]);
+});

@@ -27,3 +27,11 @@ Se você fez novas mudanças apenas no computador depois da versão-base citada,
 - `npm run check`, sintaxe de `viewport.js` e `git diff --check`: passaram.
 - Chromium: busca com/sem acento, aliases, busca vazia, setas P1/P2, retenção da escolha, partida local e conexão entre dois navegadores sem erros de JavaScript.
 - Partida verificada sem rolagem em 1440×900, 1920×1080, 1366×768, 390×844, 844×390, 360×640, 640×360 e 320×568.
+
+## Adição: finalização implementada dentro do jogo
+
+A cena descrita foi implementada em Canvas, não como imagem estática. Um especial letal sem defesa ativa automaticamente uma sequência de 1,45 s com aproximação, energia mágica, partículas e adversário ajoelhado. Ela usa os visuais dos 11 personagens. O placar, relógio, respawn, seleção e modos existentes são mantidos.
+
+`public/finisher.js` cuida do desenho da sequência; `public/engine.js` envia o evento e os snapshots sincronizados, e `public/app.js` controla a apresentação. Não depende de serviços externos nem de arquivos de imagem gerados.
+
+Verificação da finalização: 42 testes Node passaram; testes em Chromium confirmaram acionamento por especial real nos dois clientes online, modo local, movimento reduzido, retorno ao combate, +1 KO uma única vez, respawn normal, resultado após a cena quando o tempo acaba e limpeza na revanche. Os 11 personagens foram desenhados em cinco momentos da cena, com e sem movimento reduzido, sem mutar o estado do jogo.
