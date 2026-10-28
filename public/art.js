@@ -322,8 +322,8 @@ export function portraitSVG(character, small=false) {
 }
 
 // Cinematic poses reuse the real character artwork, including the four original
-// atlases. The kneeling pose keeps the identifiable upper body and folds its
-// legs explicitly; it never turns a defeated fighter into another character.
+// atlases. Additional arm poses keep the original head, clothes and lower body.
+// Defeat poses rotate or bend an intact fighter; no anatomy is removed.
 export function drawFinisherPose(ctx, player, x, ground, scale, pose='punch', extension=1, facing=player.facing) {
   const id=player.characterId, look=LOOKS[id]||LOOKS.emerzon;
   const amount=Math.max(0,Math.min(1,extension));
@@ -331,8 +331,10 @@ export function drawFinisherPose(ctx, player, x, ground, scale, pose='punch', ex
   const atlasReady=Object.hasOwn(PUNCH_ROWS,id)&&punchSheet?.complete&&punchSheet.naturalWidth;
   const idleReady=image?.complete&&image.naturalWidth;
   const isKneel=pose==='kneel';
-  const pixelPose=isKneel?'idle':'attack';
-  const frame=isKneel?0:amount<.25?0:amount<.65?1:2;
+  const isPunch=pose==='punch';
+  const reposed=pose==='grab'||pose==='victory';
+  const pixelPose=isPunch||reposed?'attack':'idle';
+  const frame=reposed?2:isPunch?(amount<.25?0:amount<.65?1:2):0;
   const paintBody=()=>{
     if(atlasReady) {
       const row=PUNCH_ROWS[id],feet=PUNCH_FEET[row],width=362/feet*110;
@@ -341,12 +343,12 @@ export function drawFinisherPose(ctx, player, x, ground, scale, pose='punch', ex
         ctx.fillStyle='#eef1e9';ctx.fillRect(-17,-76,8,8);ctx.fillRect(-20,-74,3,4);
         ctx.fillStyle='#67432c';ctx.fillRect(-16,-76,6,2);
       }
-    } else if(idleReady&&isKneel) {
+    } else if(idleReady&&!isPunch) {
       const width=crop.width/crop.height*110;
       ctx.drawImage(image,crop.x,crop.y,crop.width,crop.height,-width/2,-110,width,110);
     } else {
       ctx.save();ctx.translate(-34,-110);
-      for(const [rx,ry,w,h,color] of sprite(id,pixelPose,0,amount)) {
+      for(const [rx,ry,w,h,color] of sprite(id,pixelPose,0,reposed?1:amount)) {
         ctx.fillStyle=color;ctx.fillRect(rx,ry,w,h);
       }
       ctx.restore();
@@ -354,7 +356,50 @@ export function drawFinisherPose(ctx, player, x, ground, scale, pose='punch', ex
   };
   ctx.save();ctx.translate(x,ground);ctx.scale((facing<0?-1:1)*scale,scale);
   ctx.imageSmoothingEnabled=false;
-  if(isKneel) {
+  if(pose==='grab'||pose==='victory') {
+    // Preserve the original center and lower-body artwork while replacing the
+    // baked-in guard arms with poses in the matching character palette.
+    ctx.save();ctx.beginPath();
+    ctx.moveTo(-40,-112);ctx.lineTo(35,-112);ctx.lineTo(35,-76);
+    ctx.lineTo(20,-76);ctx.lineTo(20,-33);ctx.lineTo(56,-33);
+    ctx.lineTo(56,1);ctx.lineTo(-56,1);ctx.lineTo(-56,-33);
+    ctx.lineTo(-21,-33);ctx.lineTo(-21,-76);ctx.lineTo(-40,-76);
+    ctx.closePath();ctx.clip();paintBody();ctx.restore();
+    const bare=id==='douglas'||id==='kid-bengala';
+    const sleeve=id==='tun-tum-sarhur'?look.shade:bare?look.skin:look.top;
+    const arm=(ax,ay,bx,by,width,color)=>{
+      ctx.fillStyle=color;
+      const steps=Math.max(1,Math.ceil(Math.max(Math.abs(bx-ax),Math.abs(by-ay))/3));
+      for(let i=0;i<=steps;i++)ctx.fillRect(Math.round(ax+(bx-ax)*i/steps-width/2),Math.round(ay+(by-ay)*i/steps-width/2),width,width);
+    };
+    if(pose==='grab') {
+      // Two separate wrists and hands meet the opponent's neck region.
+      const reach=42+amount*31;
+      arm(-17,-62,18,-49,12,look.dark);arm(-17,-62,18,-49,9,sleeve);
+      arm(18,-49,reach-4,-70,11,look.shade);arm(18,-49,reach-4,-70,8,look.skin);
+      arm(19,-66,40,-78,12,look.dark);arm(19,-66,40,-78,9,sleeve);
+      arm(40,-78,reach,-80,11,look.shade);arm(40,-78,reach,-80,8,look.skin);
+      ctx.fillStyle=look.skin;ctx.fillRect(reach-4,-85,12,10);ctx.fillRect(reach-8,-73,12,9);
+      ctx.fillStyle=look.shade;ctx.fillRect(reach+5,-83,2,7);ctx.fillRect(reach+1,-71,2,5);
+    } else {
+      const lift=amount*43;
+      for(const side of [-1,1]) {
+        arm(side*20,-65,side*35,-69-lift*.45,13,look.dark);
+        arm(side*20,-65,side*35,-69-lift*.45,10,sleeve);
+        arm(side*35,-69-lift*.45,side*37,-76-lift,12,look.shade);
+        arm(side*35,-69-lift*.45,side*37,-76-lift,9,look.skin);
+        ctx.fillStyle=look.shade;ctx.fillRect(side*37-7,-85-lift,14,13);
+        ctx.fillStyle=look.skin;ctx.fillRect(side*37-6,-86-lift,12,10);
+        ctx.fillStyle='#ffffff16';ctx.fillRect(side*37-4,-85-lift,7,2);
+      }
+    }
+  } else if(pose==='fall') {
+    const angle=amount*Math.PI/2,halfWidth=atlasReady?49:33;
+    ctx.translate(0,-55*Math.cos(angle)-halfWidth*Math.sin(angle));
+    ctx.rotate(-angle);ctx.translate(0,55);paintBody();
+  } else if(pose==='grabbed') {
+    ctx.rotate(amount*.07);paintBody();
+  } else if(isKneel) {
     // One grounded knee, one planted foot, with the upper body visibly bowed.
     ctx.fillStyle=look.pants;ctx.fillRect(-16,-30,20,16);ctx.fillRect(-7,-20,31,14);
     ctx.fillStyle=look.dark;ctx.fillRect(12,-15,13,13);ctx.fillRect(-19,-16,13,14);

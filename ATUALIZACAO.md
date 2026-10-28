@@ -23,15 +23,21 @@ Se você fez novas mudanças apenas no computador depois da versão-base citada,
 
 ## Verificação deste pacote
 
-- `npm test`: 38 testes passaram, incluindo combate dos sete convidados, arte própria, conexão online e revanche.
+- `npm test`: 45 testes passaram, incluindo combate dos sete convidados, arte própria, conexão online e revanche.
 - `npm run check`, sintaxe de `viewport.js` e `git diff --check`: passaram.
 - Chromium: busca com/sem acento, aliases, busca vazia, setas P1/P2, retenção da escolha, partida local e conexão entre dois navegadores sem erros de JavaScript.
 - Partida verificada sem rolagem em 1440×900, 1920×1080, 1366×768, 390×844, 844×390, 360×640, 640×360 e 320×568.
 
 ## Adição: finalização implementada dentro do jogo
 
-A cena descrita foi implementada em Canvas, não como imagem estática. Um especial letal sem defesa ativa automaticamente uma sequência de 1,45 s com aproximação, energia mágica, partículas e adversário ajoelhado. Ela usa os visuais dos 11 personagens. O placar, relógio, respawn, seleção e modos existentes são mantidos.
+A cena descrita foi implementada em Canvas, não como imagem estática. Um especial letal sem defesa ativa automaticamente uma sequência de 1,45 s com agarrão, impacto em silhuetas, partículas vermelhas abstratas e pose de vitória. Ela usa os visuais dos 11 personagens. O placar, relógio, respawn, seleção e modos existentes são mantidos.
 
 `public/finisher.js` cuida do desenho da sequência; `public/engine.js` envia o evento e os snapshots sincronizados, e `public/app.js` controla a apresentação. Não depende de serviços externos nem de arquivos de imagem gerados.
 
-Verificação da finalização: 42 testes Node passaram; testes em Chromium confirmaram acionamento por especial real nos dois clientes online, modo local, movimento reduzido, retorno ao combate, +1 KO uma única vez, respawn normal, resultado após a cena quando o tempo acaba e limpeza na revanche. Os 11 personagens foram desenhados em cinco momentos da cena, com e sem movimento reduzido, sem mutar o estado do jogo.
+Verificação da finalização: 45 testes Node passaram; testes em Chromium confirmaram acionamento por especial real nos dois clientes online, modo local, movimento reduzido, retorno ao combate, +1 KO uma única vez, respawn normal, resultado após a cena quando o tempo acaba e limpeza na revanche. Os 11 personagens foram desenhados em cinco momentos da cena, com e sem movimento reduzido, sem mutar o estado do jogo.
+
+## Versão com silhuetas e pose de vitória
+
+A sequência substitui o feixe mágico anterior por aproximação e agarrão com duas mãos, corte para silhuetas durante o impacto e pose de vitória. Os personagens permanecem inteiros. As partículas vermelhas são formas abstratas em pixel art. O impacto sonoro é sintético, toca uma única vez por cena e respeita o mudo. Duração, controles, sincronização, placar e renascimento são mantidos.
+
+Verificação desta versão: 45 testes passaram. Chromium validou áudio uma vez por impacto, mudo, reprodução nos dois clientes online, modo local, retorno ao combate, respawn, fim do relógio e revanche. As três poses e os 11 lutadores foram conferidos com desenho determinístico e movimento reduzido.
