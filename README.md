@@ -4,6 +4,10 @@ Jogo de luta arcade multiplayer 1x1, em português, com pixel art original e are
 
 Os visuais dos quatro personagens foram adaptados em pixel art a partir das fotos de referência fornecidas. A seleção e a arena usam a mesma arte, distribuída com o jogo em `public/assets/`: Emerzon veste a camisa do Corinthians; Douglas aparece sem camisa, com o corpo mais gordo e um revólver .38 na mão; José toma café em uma xícara; Kauã veste a camisa do São Paulo. Esses itens fazem parte do visual dos personagens. As imagens são carregadas localmente, sem serviços de geração ou outras chamadas externas durante as partidas.
 
+## Hospedar na Vercel com multiplayer
+
+Use a branch `codex/vercel-multiplayer`, a raiz do repositório (não `public`) e configure um Redis Free compartilhado. O guia completo está em [VERCEL.md](VERCEL.md). O cliente recupera a sala ao atualizar a mesma aba e tenta reconectar após quedas breves.
+
 ## Executar
 
 Requer Node.js 22 ou superior e npm. No diretório do repositório:

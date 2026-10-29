@@ -47,3 +47,11 @@ Verificação desta versão: 46 testes passaram. Chromium validou áudio uma vez
 A finalização agora tem agarrão (0–1,1 s), tela preta (1,1–3,5 s), silhuetas (3,5–4,3 s) e vitória (4,3–5,5 s). Os três impactos de arcade são sincronizados e não usam sons realistas de lesão. A preferência por movimento reduzido mantém a câmera estável. Durante a cena, o tempo de combate, os personagens, os itens e os bônus ficam pausados; o adversário volta ao fim da cena, com vida cheia e a proteção habitual. Nocautes comuns continuam com retorno em 2 s.
 
 Verificação da duração longa: 46 testes de motor, renderização e servidor passaram. O relógio de combate não perde tempo na transição de saída; os dados da finalização persistem por mais de 5 s no online. Chromium validou a tela preta, as três batidas com mudo respeitado, pausa dos personagens/relógio, retorno com vida cheia e cena completa antes do resultado no último instante da partida.
+
+## Multiplayer adaptado para Vercel
+
+A nova API `api/game.js` guarda salas e simulação em Redis compartilhado e usa consultas HTTPS curtas, sem depender de um processo WebSocket permanente na Vercel. Há controle de concorrência, credenciais privadas por jogador, recuperação de sessão, reconexão, pausa por ausência e revanche. O modo local e o servidor WebSocket original continuam disponíveis.
+
+Para publicar, siga `VERCEL.md`: importe a branch `codex/vercel-multiplayer` com Root Directory na raiz e adicione as duas variáveis REST do Redis no painel da Vercel. A hospedagem real depende dessa configuração na sua conta.
+
+Verificação da adaptação Vercel: 67 testes passaram. Também foi usado Redis7.4 real por uma API REST compatível, com 245 instâncias de requisição criadas do zero e dois navegadores isolados; foram validados luta, finalização, atualização da página, reconexão, pausa, revanche e saída. O build está pronto; a publicação exige configurar o Redis Free e as variáveis descritas em VERCEL.md na conta do usuário.

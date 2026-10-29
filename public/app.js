@@ -1,12 +1,13 @@
 import { CHARACTERS, ITEM_TYPES, ROUND_DURATION, FINISHER_DURATION, createMatch, stepMatch } from './engine.js';
 import { portraitSVG, drawFighter, drawArena, drawItems } from './art.js';
 import { drawFinisher, FINISHER_IMPACT_TIMES, getFinisherStage } from './finisher.js';
+import { OnlineTransport } from './online.js';
 
 const $=id=>document.getElementById(id);
 const character=id=>CHARACTERS.find(c=>c.id===id)||CHARACTERS[0];
-let selected='emerzon', opponent='douglas', socket=null, connecting=null, room=null;
+let selected='emerzon', opponent='douglas', room=null, onlineRoundId=null, connectionState='connected';
 let state=null, mode=null, running=false, lastFrame=0, heartbeat=0, lastEvent=0;
-let sound=false, audio=null, toastTimer, pendingRequest=null;
+let sound=false, audio=null, toastTimer;
 const inputs=[{},{}], keys=new Set(), touch=new Set(), particles=[];
 const eventQueue=[];
 const bloodLayer=document.createElement('canvas');
@@ -87,44 +88,33 @@ function beep(type,intensity=1){
   try{audio??=new (window.AudioContext||window.webkitAudioContext)();if(audio.state==='suspended')audio.resume();const o=audio.createOscillator(),g=audio.createGain();o.connect(g);g.connect(audio.destination);o.type=type==='hit'?'sawtooth':'square';const f=type==='hit'?110:type==='special'?360:type==='finish'?440:640;o.frequency.setValueAtTime(f,audio.currentTime);o.frequency.exponentialRampToValueAtTime(type==='hit'?40:f/2,audio.currentTime+.12);g.gain.setValueAtTime(.035,audio.currentTime);g.gain.exponentialRampToValueAtTime(.001,audio.currentTime+.14);o.start();o.stop(audio.currentTime+.15);}catch{/* Sound is optional; gameplay stays available. */}
 }
 
-// Same-origin WebSocket: rooms work on HTTP or HTTPS without a third-party service.
-function connect(){
-  if(socket?.readyState===WebSocket.OPEN)return Promise.resolve(socket);
-  if(connecting)return connecting;
-  connecting=new Promise((resolve,reject)=>{
-    const ws=new WebSocket(`${location.protocol==='https:'?'wss':'ws'}://${location.host}/ws`);socket=ws;
-    const timeout=setTimeout(()=>{ws.close();reject(new Error('O servidor demorou a responder. Tente novamente.'));},7000);
-    ws.addEventListener('open',()=>{clearTimeout(timeout);connecting=null;resolve(ws);});
-    ws.addEventListener('message',e=>{try{receive(JSON.parse(e.data));}catch(error){console.warn('Não foi possível ler o estado da arena.',error);}});
-    ws.addEventListener('error',()=>{clearTimeout(timeout);connecting=null;reject(new Error('Não foi possível conectar à arena. O modo local continua disponível.'));});
-    ws.addEventListener('close',()=>{
-      clearTimeout(timeout);connecting=null;
-      if(socket!==ws)return;
-      socket=null;
-      if(pendingRequest){pendingRequest.reject(new Error('Conexão encerrada. Tente novamente.'));pendingRequest=null;}
-      if(room||mode==='online'){room=null;stopGame();closeDialogs();toast('A conexão com a sala foi encerrada. Crie ou entre em uma sala novamente.');}
-    });
-  });return connecting;
-}
-function send(message){if(socket?.readyState===WebSocket.OPEN)socket.send(JSON.stringify(message));}
-async function requestRoom(type,code){
-  await connect();
-  return new Promise((resolve,reject)=>{
-    const timer=setTimeout(()=>{if(pendingRequest){pendingRequest=null;send({type:'leave'});reject(new Error('Não recebemos resposta da sala. Tente novamente.'));}},7000);
-    pendingRequest={resolve:data=>{clearTimeout(timer);resolve(data);},reject:error=>{clearTimeout(timer);reject(error);}};
-    send({type,characterId:selected,code});
-  });
+// Both hosting modes use the same game protocol and authoritative rules.
+const online=new OnlineTransport({
+  onMessage:receive,
+  onStatus:status=>{connectionState=status;updateConnectionStatus();},
+  onExpired:message=>{if(room||mode==='online'){room=null;onlineRoundId=null;stopGame();closeDialogs();toast(message||'A sala expirou. Crie ou entre em uma sala novamente.');}},
+});
+function send(message){online.send(message);}
+function requestRoom(type,code){return online.requestRoom(type,selected,code);}
+function updateConnectionStatus(){
+  const element=$('game-connection');
+  if(!element)return;
+  const other=room?.players?.[1-room.playerIndex];
+  element.textContent=connectionState==='reconnecting'?'RECONECTANDO…':other?.connected===false?'AGUARDANDO O ADVERSÁRIO RECONECTAR…':'';
+  element.hidden=!element.textContent||mode!=='online';
 }
 function receive(message){
   if(message.type==='error'){
-    if(pendingRequest){pendingRequest.reject(new Error(message.message));pendingRequest=null;}else toast(message.message);return;
+    toast(message.message);return;
   }
   if(message.type==='room'){
-    room=message;
-    if(pendingRequest){pendingRequest.resolve(message);pendingRequest=null;}
+    const previous=room;room=message;
+    updateConnectionStatus();
+    const own=room.players[room.playerIndex]?.characterId;
+    if(own&&own!==selected){selected=own;renderRoster();}
     if(message.status==='waiting'){
       if(running)stopGame();
-      renderLobby();
+      if(!$('lobby-dialog').open||previous?.code!==room.code||previous?.playerIndex!==room.playerIndex)renderLobby();
     } else if(message.status==='finished'&&mode==='online'){
       const me=message.players[message.playerIndex],other=message.players[1-message.playerIndex];
       $('rematch-button').disabled=!!me?.rematch;
@@ -134,8 +124,12 @@ function receive(message){
   }
   if(message.type==='state'){
     if(!room)return;
+    const changedRound=message.roundId&&message.roundId!==onlineRoundId;
     if(!running||mode!=='online')startGame('online',message.state);
-    if(state?.phase==='finished'&&message.state.phase==='countdown'){resetRoundEffects(message.state);$('game-result').hidden=true;$('rematch-button').disabled=false;$('rematch-button').innerHTML='REVANCHE <span>↻</span>';}
+    else if(changedRound||(state?.phase==='finished'&&message.state.phase==='countdown')){
+      resetRoundEffects(message.state);$('game-result').hidden=true;$('rematch-button').disabled=false;$('rematch-button').innerHTML='REVANCHE <span>↻</span>';
+    }
+    if(message.roundId)onlineRoundId=message.roundId;
     state=message.state;enqueueEvents(state.events);
   }
   if(message.type==='opponent_left'){
@@ -149,7 +143,7 @@ function renderLobby(){
   $('lobby-player').innerHTML=`${portraitSVG(c,true)}<div><strong>${c.name}</strong><span>${c.role} · PRONTO PARA LUTAR</span></div>`;
   if(!$('lobby-dialog').open)showDialog('lobby-dialog');
 }
-function leaveRoom(){send({type:'leave'});room=null;$('lobby-dialog').close();}
+function leaveRoom(){online.leave();room=null;onlineRoundId=null;$('lobby-dialog').close();}
 $('lobby-dialog').addEventListener('cancel',()=>leaveRoom());
 $('leave-lobby').addEventListener('click',leaveRoom);$('cancel-room').addEventListener('click',leaveRoom);
 $('copy-code').addEventListener('click',async()=>{
@@ -172,7 +166,7 @@ function renderOpponents(){
 $('opponent-search').addEventListener('input',()=>{opponentPage=0;renderOpponents();});
 $('opponent-prev').addEventListener('click',()=>{opponentPage--;renderOpponents();});
 $('opponent-next').addEventListener('click',()=>{opponentPage++;renderOpponents();});
-$('local-button').addEventListener('click',()=>{renderOpponents();showDialog('local-dialog');});
+$('local-button').addEventListener('click',()=>{online.leave();room=null;onlineRoundId=null;renderOpponents();showDialog('local-dialog');});
 $('start-local').addEventListener('click',()=>startGame('local',createMatch([selected,opponent])));
 
 function resetRoundEffects(newState){
@@ -183,11 +177,12 @@ function resetRoundEffects(newState){
   $('arena-event').hidden=true;
 }
 function startGame(newMode,newState){
-  closeDialogs();clearInputs();state=newState;mode=newMode;resetRoundEffects(newState);
+  closeDialogs();state=newState;mode=newMode;clearInputs();resetRoundEffects(newState);
   $('game-screen').hidden=false;document.querySelector('.site-shell').inert=true;document.body.style.overflow='hidden';$('game-result').hidden=true;
   $('rematch-button').disabled=false;$('rematch-button').innerHTML='REVANCHE <span>↻</span>';
   $('game-mode').textContent=mode==='local'?'PVP LOCAL · 1 × 1':`PVP ONLINE · SALA ${room.code}`;
   $('you-tag').textContent=mode==='online'?` / VOCÊ É P${room.playerIndex+1}`:'';
+  updateConnectionStatus();
   $('p2-controls').hidden=mode==='online';
   $('p1-name').textContent=character(state.players[0].characterId).name.toUpperCase();
   $('p2-name').textContent=character(state.players[1].characterId).name.toUpperCase();
@@ -399,4 +394,4 @@ function renderGame(time,dt){
 
 async function checkServer(){try{const response=await fetch('/api/health');if(!response.ok)throw new Error();const data=await response.json();if(!data.ok)throw new Error();$('server-status').innerHTML='<i></i> ARENA ONLINE';$('server-status').classList.remove('offline');}catch{$('server-status').innerHTML='<i></i> MODO LOCAL';$('server-status').classList.add('offline');}}
 $('item-guide').innerHTML=ITEM_TYPES.map(item=>`<span class="item-legend" style="--item-color:${item.color}" title="${item.description}"><b>${({heal:'+',speed:'ϟ',shield:'◇',energy:'▰',rage:'✦',jump:'↑'})[item.id]}</b>${item.short}</span>`).join('');
-renderRoster();checkServer();setInterval(checkServer,30000);
+renderRoster();checkServer();online.restore().catch(error=>toast(error.message));setInterval(checkServer,30000);

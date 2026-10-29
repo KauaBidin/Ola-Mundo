@@ -4,12 +4,17 @@
   "private": true,
   "type": "module",
   "description": "Arena de luta multiplayer 1x1 do Grupo APANE",
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
     "test": "node --test tests/*.test.js",
-    "check": "node --check server.js && node --check public/app.js && node --check public/art.js && node --check public/injuries.js && node --check public/engine.js && node --check public/finisher.js && node --check public/viewport.js"
+    "check": "node scripts/check.mjs",
+    "build": "node scripts/build.mjs"
   },
-  "dependencies": { "ws": "8.21.0" }
+  "dependencies": {
+    "ws": "8.21.0"
+  }
 }

@@ -5,6 +5,9 @@ import { fileURLToPath } from 'node:url';
 import { randomInt } from 'node:crypto';
 import { WebSocketServer, WebSocket } from 'ws';
 import { CHARACTERS, createMatch, stepMatch } from './public/engine.js';
+import { createGameHandler } from './api/game.js';
+import { createRoomService } from './lib/room-service.js';
+import { createRoomStore } from './lib/room-store.js';
 
 const PUBLIC = path.resolve(fileURLToPath(new URL('./public/', import.meta.url)));
 const MIME = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon', '.json': 'application/json; charset=utf-8', '.woff2': 'font/woff2' };
@@ -14,11 +17,13 @@ const send = (socket, data) => {
 };
 const emptyInput = () => ({ left: false, right: false, jump: false, attack: false, special: false, block: false, dash: false });
 
-export function createGameServer({ port = Number(process.env.PORT || 3000), host = process.env.HOST || '0.0.0.0' } = {}) {
+export function createGameServer({ port = Number(process.env.PORT || 3000), host = process.env.HOST || '0.0.0.0', roomService = null } = {}) {
   const rooms = new Map();
+  const multiplayer=roomService?createGameHandler({service:roomService}):null;
   const server = http.createServer(async (request, response) => {
     response.setHeader('X-Content-Type-Options', 'nosniff');
     response.setHeader('Referrer-Policy', 'same-origin');
+    if(multiplayer&&request.url.split('?')[0]==='/api/game'){await multiplayer(request,response);return;}
     if (!['GET', 'HEAD'].includes(request.method)) {
       response.writeHead(405, { Allow: 'GET, HEAD' }).end();
       return;
@@ -28,7 +33,7 @@ export function createGameServer({ port = Number(process.env.PORT || 3000), host
     catch { response.writeHead(400).end('Requisição inválida'); return; }
     if (pathname === '/api/health') {
       response.writeHead(200, { 'Content-Type': MIME['.json'], 'Cache-Control': 'no-store' });
-      response.end(request.method === 'HEAD' ? undefined : JSON.stringify({ ok: true, game: 'PVP GRUPO APANE', rooms: rooms.size }));
+      response.end(request.method === 'HEAD' ? undefined : JSON.stringify(multiplayer?{ok:true,game:'PVP GRUPO APANE',transport:'http',pollAfterMs:100}:{ ok: true, game: 'PVP GRUPO APANE', rooms: rooms.size }));
       return;
     }
     const filename = path.resolve(PUBLIC, `.${pathname === '/' ? '/index.html' : pathname}`);
@@ -170,7 +175,8 @@ export function createGameServer({ port = Number(process.env.PORT || 3000), host
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const app = createGameServer();
+  const shared=process.env.UPSTASH_REDIS_REST_URL||process.env.KV_REST_API_URL;
+  const app = createGameServer({roomService:shared?createRoomService({store:createRoomStore()}):null});
   app.ready.then(address => console.log(`PVP GRUPO APANE ativo na porta ${address.port}`)).catch(error => { console.error(error.message); process.exitCode = 1; });
   let stopping = false;
   const stop = () => { if (!stopping) { stopping = true; app.close().then(() => process.exit(0)); } };

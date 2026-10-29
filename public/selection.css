@@ -77,3 +77,6 @@
 /* Keep the cut to black free of lettering; HUD and exit stay available. */
 .canvas-wrap.finishing-blackout .finisher-caption{visibility:hidden}
 .canvas-wrap.finishing-blackout,.canvas-wrap.finishing-blackout canvas{background:#000}
+
+.game-connection{font:8px var(--mono);color:#ffd58c;text-align:center;max-width:35%}
+@media(max-width:680px){.game-connection{font-size:6px;max-width:30%}}
